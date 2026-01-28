@@ -56,8 +56,22 @@ chatRouter.post('/', async (req, res) => {
       history?: ChatMessage[];
     };
 
-    if (!message) {
-      return res.status(400).json({ error: 'Message is required' });
+    // Input validation
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ error: 'Message is required and must be a string' });
+    }
+
+    // Limit message length to prevent high API costs and abuse
+    const MAX_MESSAGE_LENGTH = 1000;
+    if (message.length > MAX_MESSAGE_LENGTH) {
+      return res.status(400).json({
+        error: `Message too long. Maximum ${MAX_MESSAGE_LENGTH} characters allowed.`
+      });
+    }
+
+    // Validate history array
+    if (!Array.isArray(history)) {
+      return res.status(400).json({ error: 'History must be an array' });
     }
 
     // If OpenAI is not available, use fallback
@@ -111,8 +125,22 @@ chatRouter.post('/stream', async (req, res) => {
       history?: ChatMessage[];
     };
 
-    if (!message) {
-      return res.status(400).json({ error: 'Message is required' });
+    // Input validation
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ error: 'Message is required and must be a string' });
+    }
+
+    // Limit message length to prevent high API costs and abuse
+    const MAX_MESSAGE_LENGTH = 1000;
+    if (message.length > MAX_MESSAGE_LENGTH) {
+      return res.status(400).json({
+        error: `Message too long. Maximum ${MAX_MESSAGE_LENGTH} characters allowed.`
+      });
+    }
+
+    // Validate history array
+    if (!Array.isArray(history)) {
+      return res.status(400).json({ error: 'History must be an array' });
     }
 
     // If OpenAI is not available, stream fallback

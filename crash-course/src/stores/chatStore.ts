@@ -57,7 +57,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const assistantMessage: ChatMessage = {
         id: generateId(),
         role: 'assistant',
-        content: data.message,
+        content: data.response,
         timestamp: new Date().toISOString(),
       };
 

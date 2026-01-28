@@ -1,0 +1,230 @@
+@import "tailwindcss";
+
+/* Import fonts */
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap');
+
+/* Custom Theme Configuration for Tailwind v4 */
+@theme {
+  /* Overcooked Academic Color Palette */
+  --color-primary-50: #eef2ff;
+  --color-primary-100: #e0e7ff;
+  --color-primary-200: #c7d2fe;
+  --color-primary-300: #a5b4fc;
+  --color-primary-400: #818cf8;
+  --color-primary-500: #6366f1;
+  --color-primary-600: #4f46e5;
+  --color-primary-700: #4338ca;
+  --color-primary-800: #3730a3;
+  --color-primary-900: #312e81;
+
+  --color-secondary-50: #fffbeb;
+  --color-secondary-100: #fef3c7;
+  --color-secondary-200: #fde68a;
+  --color-secondary-300: #fcd34d;
+  --color-secondary-400: #fbbf24;
+  --color-secondary-500: #f59e0b;
+  --color-secondary-600: #d97706;
+  --color-secondary-700: #b45309;
+  --color-secondary-800: #92400e;
+  --color-secondary-900: #78350f;
+
+  --color-accent-50: #ecfdf5;
+  --color-accent-100: #d1fae5;
+  --color-accent-200: #a7f3d0;
+  --color-accent-300: #6ee7b7;
+  --color-accent-400: #34d399;
+  --color-accent-500: #10b981;
+  --color-accent-600: #059669;
+  --color-accent-700: #047857;
+  --color-accent-800: #065f46;
+  --color-accent-900: #064e3b;
+
+  --color-error-500: #f43f5e;
+  --color-error-600: #e11d48;
+
+  --color-game-bg: #1e293b;
+  --color-game-surface: #334155;
+  --color-game-light: #f8fafc;
+
+  /* Font families */
+  --font-display: 'Nunito', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+
+  /* Border radius */
+  --radius-game: 1rem;
+  --radius-game-lg: 1.5rem;
+
+  /* Shadows */
+  --shadow-game: 0 4px 14px 0 rgba(0, 0, 0, 0.1);
+  --shadow-game-hover: 0 6px 20px 0 rgba(0, 0, 0, 0.15);
+  --shadow-game-active: 0 2px 8px 0 rgba(0, 0, 0, 0.1);
+
+  /* Custom keyframes */
+  --animate-float: float 3s ease-in-out infinite;
+  --animate-bounce-slow: bounce 2s infinite;
+  --animate-pulse-slow: pulse 3s infinite;
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+}
+
+/* Base styles */
+html {
+  font-family: var(--font-body);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: var(--color-game-light);
+  color: #111827;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+/* Utility classes */
+.btn {
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-game);
+  font-weight: 600;
+  transition: all 0.2s;
+  box-shadow: var(--shadow-game);
+}
+
+.btn:hover {
+  box-shadow: var(--shadow-game-hover);
+  transform: translateY(-2px);
+}
+
+.btn:active {
+  box-shadow: var(--shadow-game-active);
+  transform: translateY(0);
+}
+
+.btn-primary {
+  background-color: var(--color-primary-600);
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: var(--color-primary-700);
+}
+
+.btn-secondary {
+  background-color: var(--color-secondary-500);
+  color: white;
+}
+
+.btn-secondary:hover {
+  background-color: var(--color-secondary-600);
+}
+
+.btn-accent {
+  background-color: var(--color-accent-500);
+  color: white;
+}
+
+.btn-accent:hover {
+  background-color: var(--color-accent-600);
+}
+
+.card {
+  background-color: white;
+  border-radius: var(--radius-game-lg);
+  box-shadow: var(--shadow-game);
+  padding: 1.5rem;
+  border: 1px solid #f3f4f6;
+}
+
+.card-game {
+  background-color: var(--color-game-surface);
+  border-radius: var(--radius-game-lg);
+  box-shadow: var(--shadow-game);
+  padding: 1.5rem;
+  border: 1px solid #374151;
+  color: white;
+}
+
+/* Game UI specific styles */
+.game-panel {
+  position: fixed;
+  background-color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border-radius: var(--radius-game-lg);
+  box-shadow: var(--shadow-game);
+  border: 2px solid var(--color-primary-200);
+}
+
+.progress-bar {
+  height: 1rem;
+  background-color: #e5e7eb;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(to right, var(--color-primary-500), var(--color-primary-600));
+  border-radius: 9999px;
+  transition: all 0.5s ease-out;
+}
+
+/* Health bar for bosses */
+.health-bar {
+  height: 1.5rem;
+  background-color: #d1d5db;
+  border-radius: 9999px;
+  overflow: hidden;
+  border: 2px solid #9ca3af;
+}
+
+.health-fill {
+  height: 100%;
+  background: linear-gradient(to right, var(--color-error-500), var(--color-error-600));
+  border-radius: 9999px;
+  transition: all 0.3s;
+}
+
+/* XP bar */
+.xp-bar {
+  height: 0.75rem;
+  background-color: #e5e7eb;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.xp-fill {
+  height: 100%;
+  background: linear-gradient(to right, var(--color-secondary-400), var(--color-secondary-500));
+  border-radius: 9999px;
+  transition: all 0.7s;
+}
+
+/* Text shadow utilities */
+.text-shadow {
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.text-shadow-lg {
+  text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* For 3D canvas overlay positioning */
+.canvas-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.canvas-overlay > * {
+  pointer-events: auto;
+}

@@ -5,7 +5,7 @@ import { useChaptersForMap, useAddChapter, useDeleteChapter } from '../../../hoo
 import { useContentItemsForMap, useAddContentItem, useUpdateContentItem, useDeleteContentItem } from '../../../hooks/useContentItems';
 import { useAuthStore } from '../../../stores/authStore';
 import { uploadFile } from '../../../lib/storage';
-import type { ContentItemType, Chapter } from '../../../types/admin';
+import type { ContentItemType } from '../../../types/admin';
 import { SECTION_COLORS } from '../../../utils/buildMap';
 
 // ── Constants ───────────────────────────────────────────
@@ -432,7 +432,7 @@ export function EditorSidebar({ mapId, placedItemIds = [], onRemoveNode }: Edito
 // ── Add Content Button with fixed-position dropdown ──────
 
 function AddContentButton({
-  chapterId,
+  chapterId: _chapterId,
   isOpen,
   onToggle,
   onSelect,

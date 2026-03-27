@@ -40,7 +40,7 @@ export function usePublishedMaps() {
 
       if (error) throw error;
 
-      return (data || []).map((row: Record<string, unknown>) => {
+      return ((data || []) as any[]).map((row: Record<string, unknown>) => {
         const modules = row.modules as Record<string, unknown> | undefined;
         const courses = modules?.courses as Record<string, unknown> | undefined;
         const mapConfig = row.map_config as MapConfig | null;
@@ -74,15 +74,16 @@ export function usePublicMap(mapId: string) {
 
       if (error) throw error;
 
+      const row = data as any;
       return {
-        id: data.id as string,
-        moduleId: data.module_id as string,
-        title: data.title as string,
-        status: data.status as MapStatus,
-        canvasData: (data.canvas_data as CanvasData) ?? null,
-        mapConfig: (data.map_config as MapConfig) ?? null,
-        createdAt: data.created_at as string,
-        updatedAt: data.updated_at as string,
+        id: row.id as string,
+        moduleId: row.module_id as string,
+        title: row.title as string,
+        status: row.status as MapStatus,
+        canvasData: (row.canvas_data as CanvasData) ?? null,
+        mapConfig: (row.map_config as MapConfig) ?? null,
+        createdAt: row.created_at as string,
+        updatedAt: row.updated_at as string,
       };
     },
     enabled: !!mapId,
@@ -105,18 +106,19 @@ export function usePublicContentItem(contentItemId: string | null) {
 
       if (error) throw error;
 
+      const row = data as any;
       return {
-        id: data.id as string,
-        chapterId: data.chapter_id as string,
-        type: data.type as ContentItemType,
-        title: data.title as string,
-        description: (data.description as string) || '',
-        fileUrl: (data.file_url as string) ?? undefined,
-        textContent: (data.text_content as string) ?? undefined,
-        quizData: (data.quiz_data as QuizData) ?? undefined,
-        metadata: (data.metadata as Record<string, unknown>) ?? undefined,
-        order: data.order as number,
-        createdAt: data.created_at as string,
+        id: row.id as string,
+        chapterId: row.chapter_id as string,
+        type: row.type as ContentItemType,
+        title: row.title as string,
+        description: (row.description as string) || '',
+        fileUrl: (row.file_url as string) ?? undefined,
+        textContent: (row.text_content as string) ?? undefined,
+        quizData: (row.quiz_data as QuizData) ?? undefined,
+        metadata: (row.metadata as Record<string, unknown>) ?? undefined,
+        order: row.order as number,
+        createdAt: row.created_at as string,
       };
     },
     enabled: !!contentItemId,

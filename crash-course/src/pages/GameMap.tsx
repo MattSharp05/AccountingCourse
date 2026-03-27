@@ -9,7 +9,6 @@ import {
   Canvas3DErrorBoundary,
   GameLoading,
   Button,
-  XpBar,
   Modal,
   Loading,
 } from '../components/ui';
@@ -52,11 +51,12 @@ const keyboardMap = [
 export function GameMap() {
   const navigate = useNavigate();
   const { mapId } = useParams<{ mapId: string }>();
-  const { playerProgress, loadProgress, resetProgress, setCurrentNode, openContent, closeContent } = useGameStore();
+  const { playerProgress, loadProgress, setCurrentNode, openContent, closeContent } = useGameStore();
   const completedNodes = useCompletedNodes();
   const isContentOpen = useIsContentOpen();
   const currentNodeId = useCurrentNode();
   const xpInfo = xpToNextLevel(playerProgress.xp);
+  void xpInfo;
 
   // Fetch map from Supabase if mapId is present
   const { data: mapData, isLoading: mapLoading, error: mapError } = usePublicMap(mapId || '');

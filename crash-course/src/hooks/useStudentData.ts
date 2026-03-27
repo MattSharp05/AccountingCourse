@@ -65,7 +65,7 @@ export function usePublicCourses() {
 
       if (error) throw error;
 
-      return (data || []).map((row: Record<string, unknown>) => {
+      return ((data || []) as any[]).map((row: Record<string, unknown>) => {
         const modules = row.modules as { count: number }[];
         const profile = row.profiles as Record<string, unknown> | null;
 
@@ -106,17 +106,18 @@ export function usePublicCourse(courseId: string) {
 
       if (error) throw error;
 
-      const modules = data.modules as { count: number }[];
-      const profile = data.profiles as Record<string, unknown> | null;
+      const row = data as any;
+      const modules = row.modules as { count: number }[];
+      const profile = row.profiles as Record<string, unknown> | null;
 
       return {
-        id: data.id as string,
-        professorId: data.professor_id as string,
-        title: data.title as string,
-        description: (data.description as string) || '',
-        status: data.status as PublishStatus,
-        createdAt: data.created_at as string,
-        updatedAt: data.updated_at as string,
+        id: row.id as string,
+        professorId: row.professor_id as string,
+        title: row.title as string,
+        description: (row.description as string) || '',
+        status: row.status as PublishStatus,
+        createdAt: row.created_at as string,
+        updatedAt: row.updated_at as string,
         moduleCount: modules?.[0]?.count ?? 0,
         professorName: (profile?.display_name as string) || 'Instructor',
         professorEmail: (profile?.email as string) || '',
@@ -145,7 +146,7 @@ export function usePublicModulesForCourse(courseId: string) {
 
       if (error) throw error;
 
-      return (data || []).map((row: Record<string, unknown>) => {
+      return ((data || []) as any[]).map((row: Record<string, unknown>) => {
         const maps = (row.maps as Record<string, unknown>[]) || [];
         const publishedMaps = maps
           .filter((m) => m.status === 'published' && m.map_config !== null)
@@ -190,7 +191,7 @@ export function useStudentAllProgress() {
 
       if (error) throw error;
 
-      return (data || []).map((row: Record<string, unknown>) => ({
+      return ((data || []) as any[]).map((row: Record<string, unknown>) => ({
         id: row.id as string,
         studentId: row.student_id as string,
         contentItemId: row.content_item_id as string,
@@ -220,7 +221,7 @@ export function useStudentMapProgress(mapId: string) {
 
       if (error) throw error;
 
-      return (data || []).map((row: Record<string, unknown>) => ({
+      return ((data || []) as any[]).map((row: Record<string, unknown>) => ({
         id: row.id as string,
         studentId: row.student_id as string,
         contentItemId: row.content_item_id as string,
@@ -250,7 +251,7 @@ export function useEnrollments() {
         .eq('student_id', userId!);
 
       if (error) throw error;
-      return (data || []).map((row) => row.course_id as string);
+      return ((data || []) as any[]).map((row) => row.course_id as string);
     },
     enabled: !!userId,
   });
@@ -267,7 +268,7 @@ export function useEnroll() {
     mutationFn: async (courseId: string) => {
       const { error } = await supabase
         .from('student_enrollments')
-        .insert({ student_id: userId!, course_id: courseId });
+        .insert({ student_id: userId!, course_id: courseId } as any);
       if (error) throw error;
     },
     onMutate: async (courseId: string) => {
@@ -338,7 +339,7 @@ export function useUpsertProgress() {
             status,
             score: score ?? null,
             completed_at: status === 'completed' ? new Date().toISOString() : null,
-          },
+          } as any,
           { onConflict: 'student_id,content_item_id' }
         );
       if (error) throw error;

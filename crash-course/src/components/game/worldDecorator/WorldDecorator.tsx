@@ -5,7 +5,7 @@ import type { ContentNode } from '../../../types/game';
 import type { Connection, WorldPreset } from './types';
 import { PRESET_BALANCED } from './presets';
 import { createHeightFn, createHeightGrid, computeVertexColors } from './terrainGenerator';
-import { computeWorldBounds, buildDistanceGrid } from './zonePlanner';
+import { computeWorldBounds } from './zonePlanner';
 import { placeDecorations } from './decorationPlacer';
 import { InstancedFoliage } from './instancedFoliage';
 import { buildAllRibbonPaths, PATH_COLORS, type RibbonPathData } from './pathMeshBuilder';
@@ -92,10 +92,13 @@ export function WorldDecorator({
   const heightGridSize = 65;
   const cx = (bounds.minX + bounds.maxX) / 2;
   const cz = (bounds.minZ + bounds.maxZ) / 2;
+  // Height grid kept for future collider use
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const heightGrid = useMemo(
     () => createHeightGrid(heightFn, bounds.size, heightGridSize, cx, cz),
     [heightFn, bounds.size, cx, cz],
   );
+  void heightGrid;
 
   // Notify parent of terrain height function for avatar terrain following
   useEffect(() => {

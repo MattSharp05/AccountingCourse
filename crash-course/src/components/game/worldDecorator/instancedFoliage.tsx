@@ -1,7 +1,7 @@
 import { useMemo, useEffect, useRef, Suspense } from 'react';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
-import type { DecorationInstance, DecorationCategory } from './types';
+import type { DecorationInstance } from './types';
 import { ASSET_PATHS } from './presets';
 
 // ── Preload all assets ──────────────────────────────────

@@ -1,0 +1,17 @@
+{
+  "connections": [],
+  "layout": {
+    "Main": {
+      "x": 0.0,
+      "y": 0.0
+    }
+  },
+  "rooms": [
+    {
+      "backgroundName": "forest",
+      "name": "Main",
+      "workingDir": "/Users/matthewsharp/Desktop/Coding Projects/gogentic/course/exampleforeric"
+    }
+  ],
+  "version": 1
+}

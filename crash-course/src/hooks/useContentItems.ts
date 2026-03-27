@@ -34,7 +34,7 @@ export function useContentItemsForMap(mapId: string) {
         .eq('map_id', mapId);
       if (chErr) throw chErr;
 
-      const chapterIds = chapters.map((c) => c.id);
+      const chapterIds = (chapters as any[]).map((c) => c.id);
       if (chapterIds.length === 0) return [];
 
       const { data, error } = await supabase
@@ -43,7 +43,7 @@ export function useContentItemsForMap(mapId: string) {
         .in('chapter_id', chapterIds)
         .order('order', { ascending: true });
       if (error) throw error;
-      return data.map(rowToContentItem);
+      return (data as any[]).map(rowToContentItem);
     },
     enabled: !!mapId,
   });
@@ -61,15 +61,15 @@ export function useAddContentItem() {
       console.log('[addContentItem] Inserting:', { chapterId, type, title, order: (count ?? 0) + 1 });
       const { data, error } = await supabase
         .from('content_items')
-        .insert({ chapter_id: chapterId, type, title, order: (count ?? 0) + 1 })
+        .insert({ chapter_id: chapterId, type, title, order: (count ?? 0) + 1 } as any)
         .select()
         .single();
       if (error) {
         console.error('[addContentItem] DB error:', error);
         throw error;
       }
-      console.log('[addContentItem] Created:', data.id);
-      return rowToContentItem(data);
+      console.log('[addContentItem] Created:', (data as any).id);
+      return rowToContentItem(data as any);
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: contentItemKeys.forMap(variables.mapId) });
@@ -104,7 +104,7 @@ export function useUpdateContentItem() {
       console.log('[updateContentItem] Updating:', { id, fields: Object.keys(dbUpdates) });
       const { error } = await supabase
         .from('content_items')
-        .update(dbUpdates)
+        .update(dbUpdates as any)
         .eq('id', id);
       if (error) {
         console.error('[updateContentItem] DB error:', error);

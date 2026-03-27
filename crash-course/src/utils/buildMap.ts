@@ -165,6 +165,7 @@ export function buildMapConfig(
       // Find terminal nodes in current chapter (nodes with no outgoing
       // prerequisite edges to other nodes in the same chapter)
       const currentIds = new Set(currentNodes.map((n) => n.id));
+      void currentIds;
       const hasOutgoing = new Set<string>();
       for (const mn of currentNodes) {
         // Check if any other node in this chapter lists mn as a prerequisite

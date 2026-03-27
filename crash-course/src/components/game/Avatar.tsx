@@ -1,23 +1,27 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, Suspense } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useKeyboardControls } from '@react-three/drei';
 import { CapsuleCollider, RigidBody, type RapierRigidBody } from '@react-three/rapier';
 import * as THREE from 'three';
 import { useGameStore } from '../../stores';
 import type { ContentNode } from '../../types/game';
+import { ModelCharacter } from './models/ModelCharacter';
+import { ModelErrorBoundary } from './models/ModelErrorBoundary';
 
 interface AvatarProps {
   nodes: ContentNode[];
   onNodeProximity: (nodeId: string | null) => void;
+  spawnPosition?: [number, number, number];
+  heightFn?: (x: number, z: number) => number;
 }
 
 // Simple capsule-based avatar with keyboard controls
-export function Avatar({ nodes, onNodeProximity }: AvatarProps) {
+export function Avatar({ nodes, onNodeProximity, spawnPosition = [0, 2, 0], heightFn }: AvatarProps) {
   const rigidBodyRef = useRef<RapierRigidBody>(null);
   const meshRef = useRef<THREE.Group>(null);
   const [animation, setAnimation] = useState<'idle' | 'walk' | 'run'>('idle');
 
-  const { updateAvatarPosition, updateAvatarAnimation } = useGameStore();
+  const { updateAvatarPosition, updateAvatarAnimation, teleportTarget, clearTeleportTarget } = useGameStore();
 
   // Keyboard controls
   const [, getKeys] = useKeyboardControls();
@@ -45,6 +49,16 @@ export function Avatar({ nodes, onNodeProximity }: AvatarProps) {
 
   useFrame((_, delta) => {
     if (!rigidBodyRef.current || !meshRef.current) return;
+
+    // Handle teleport requests from the map overview
+    if (teleportTarget) {
+      const [tx, ty, tz] = teleportTarget;
+      const teleportY = heightFn ? heightFn(tx, tz) + 0.65 : ty + 1.5;
+      rigidBodyRef.current.setTranslation({ x: tx, y: teleportY, z: tz }, true);
+      rigidBodyRef.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      updateAvatarPosition([tx, teleportY, tz]);
+      clearTeleportTarget();
+    }
 
     const keys = getKeys();
     const { forward, backward, leftward, rightward, run } = keys as {
@@ -108,11 +122,32 @@ export function Avatar({ nodes, onNodeProximity }: AvatarProps) {
       );
     }
 
-    // Update store with current position
-    updateAvatarPosition([currentPosition.x, currentPosition.y, currentPosition.z]);
+    // Terrain following — pin avatar Y to terrain surface
+    if (heightFn) {
+      const terrainY = heightFn(currentPosition.x, currentPosition.z);
+      const targetY = terrainY + 0.65; // capsule half-extent offset
+      const currentY = currentPosition.y;
+
+      // If avatar is below or near terrain, snap up; allow small tolerance above
+      if (currentY < targetY + 0.1) {
+        rigidBodyRef.current.setTranslation(
+          { x: currentPosition.x, y: targetY, z: currentPosition.z },
+          true,
+        );
+        // Kill downward velocity so gravity doesn't fight
+        const vel = rigidBodyRef.current.linvel();
+        if (vel.y < 0) {
+          rigidBodyRef.current.setLinvel({ x: vel.x, y: 0, z: vel.z }, true);
+        }
+      }
+    }
+
+    // Update store with current position (re-read after possible correction)
+    const finalPos = rigidBodyRef.current.translation();
+    updateAvatarPosition([finalPos.x, finalPos.y, finalPos.z]);
 
     // Check node proximity
-    checkNodeProximity(currentPosition);
+    checkNodeProximity(new THREE.Vector3(finalPos.x, finalPos.y, finalPos.z));
 
     // Keep avatar upright
     rigidBodyRef.current.setAngvel({ x: 0, y: 0, z: 0 }, true);
@@ -121,7 +156,7 @@ export function Avatar({ nodes, onNodeProximity }: AvatarProps) {
   return (
     <RigidBody
       ref={rigidBodyRef}
-      position={[0, 2, 0]}
+      position={spawnPosition}
       enabledRotations={[false, false, false]}
       linearDamping={0.5}
       angularDamping={1}
@@ -130,7 +165,11 @@ export function Avatar({ nodes, onNodeProximity }: AvatarProps) {
       <CapsuleCollider args={[0.35, 0.3]} position={[0, 0.65, 0]} />
 
       <group ref={meshRef}>
-        <StudentCharacter animation={animation} />
+        <ModelErrorBoundary fallback={<StudentCharacter animation={animation} />}>
+          <Suspense fallback={<StudentCharacter animation={animation} />}>
+            <ModelCharacter animation={animation} />
+          </Suspense>
+        </ModelErrorBoundary>
       </group>
     </RigidBody>
   );
@@ -177,69 +216,69 @@ function StudentCharacter({ animation }: { animation: 'idle' | 'walk' | 'run' })
       {/* Body */}
       <mesh position={[0, 0.8, 0]} castShadow>
         <capsuleGeometry args={[0.25, 0.4, 4, 8]} />
-        <meshStandardMaterial color="#4F46E5" /> {/* Primary indigo */}
+        <meshStandardMaterial color="#4F46E5" roughness={0.8} />
       </mesh>
 
       {/* Head */}
       <mesh position={[0, 1.4, 0]} castShadow>
         <sphereGeometry args={[0.22, 16, 16]} />
-        <meshStandardMaterial color="#fcd5b8" /> {/* Skin tone */}
+        <meshStandardMaterial color="#fcd5b8" roughness={0.8}/>
       </mesh>
 
       {/* Hair */}
       <mesh position={[0, 1.55, 0]} castShadow>
         <sphereGeometry args={[0.2, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
-        <meshStandardMaterial color="#4a3728" /> {/* Brown hair */}
+        <meshStandardMaterial color="#4a3728" roughness={0.8}/>
       </mesh>
 
       {/* Eyes */}
       <mesh position={[-0.08, 1.42, 0.18]}>
         <sphereGeometry args={[0.04, 8, 8]} />
-        <meshStandardMaterial color="#1f2937" />
+        <meshStandardMaterial color="#1f2937" roughness={0.8}/>
       </mesh>
       <mesh position={[0.08, 1.42, 0.18]}>
         <sphereGeometry args={[0.04, 8, 8]} />
-        <meshStandardMaterial color="#1f2937" />
+        <meshStandardMaterial color="#1f2937" roughness={0.8}/>
       </mesh>
 
       {/* Backpack */}
       <mesh position={[0, 0.85, -0.25]} castShadow>
         <boxGeometry args={[0.35, 0.4, 0.2]} />
-        <meshStandardMaterial color="#f59e0b" /> {/* Secondary amber */}
+        <meshStandardMaterial color="#f59e0b" roughness={0.8}/>
       </mesh>
 
       {/* Left Arm */}
       <mesh ref={leftArmRef} position={[-0.35, 0.9, 0]} castShadow>
         <capsuleGeometry args={[0.08, 0.3, 4, 8]} />
-        <meshStandardMaterial color="#4F46E5" />
+        <meshStandardMaterial color="#4F46E5" roughness={0.8} />
       </mesh>
 
       {/* Right Arm */}
       <mesh ref={rightArmRef} position={[0.35, 0.9, 0]} castShadow>
         <capsuleGeometry args={[0.08, 0.3, 4, 8]} />
-        <meshStandardMaterial color="#4F46E5" />
+        <meshStandardMaterial color="#4F46E5" roughness={0.8} />
       </mesh>
 
       {/* Left Leg */}
       <mesh ref={leftLegRef} position={[-0.12, 0.35, 0]} castShadow>
         <capsuleGeometry args={[0.1, 0.25, 4, 8]} />
-        <meshStandardMaterial color="#1e293b" /> {/* Dark pants */}
+        <meshStandardMaterial color="#1e293b" roughness={0.8}/>
       </mesh>
 
       {/* Right Leg */}
       <mesh ref={rightLegRef} position={[0.12, 0.35, 0]} castShadow>
         <capsuleGeometry args={[0.1, 0.25, 4, 8]} />
-        <meshStandardMaterial color="#1e293b" />
+        <meshStandardMaterial color="#1e293b" roughness={0.8}/>
       </mesh>
 
       {/* Shoes */}
       <mesh position={[-0.12, 0.08, 0.05]} castShadow>
         <boxGeometry args={[0.12, 0.08, 0.18]} />
-        <meshStandardMaterial color="#dc2626" /> {/* Red shoes */}
+        <meshStandardMaterial color="#dc2626" roughness={0.8}/>
       </mesh>
       <mesh position={[0.12, 0.08, 0.05]} castShadow>
         <boxGeometry args={[0.12, 0.08, 0.18]} />
-        <meshStandardMaterial color="#dc2626" />
+        <meshStandardMaterial color="#dc2626" roughness={0.8}/>
       </mesh>
     </group>
   );

@@ -1,48 +1,64 @@
-import { useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
+import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { useAvatarPosition } from '../../stores';
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 
 interface FollowCameraProps {
-  offset?: [number, number, number];
+  minDistance?: number;
+  maxDistance?: number;
   smoothness?: number;
 }
 
 export function FollowCamera({
-  offset = [0, 8, 12],
-  smoothness = 0.05,
+  minDistance = 8,
+  maxDistance = 40,
+  smoothness = 0.08,
 }: FollowCameraProps) {
-  const { camera } = useThree();
+  const controlsRef = useRef<OrbitControlsImpl>(null);
   const avatarPosition = useAvatarPosition();
-  const targetPosition = useRef(new THREE.Vector3());
-  const targetLookAt = useRef(new THREE.Vector3());
+  const prevTarget = useRef(new THREE.Vector3());
+  const { camera } = useThree();
+
+  // Set initial camera position on mount
+  useEffect(() => {
+    camera.position.set(0, 12, 18);
+  }, [camera]);
 
   useFrame(() => {
-    if (!avatarPosition) return;
+    if (!controlsRef.current || !avatarPosition) return;
 
-    // Calculate target camera position
-    const targetPos = new THREE.Vector3(
-      avatarPosition[0] + offset[0],
-      avatarPosition[1] + offset[1],
-      avatarPosition[2] + offset[2]
-    );
-
-    // Smoothly interpolate camera position
-    targetPosition.current.lerp(targetPos, smoothness);
-    camera.position.copy(targetPosition.current);
-
-    // Calculate look-at point (slightly ahead of avatar)
-    const lookAtPos = new THREE.Vector3(
+    const avatarVec = new THREE.Vector3(
       avatarPosition[0],
       avatarPosition[1] + 1,
       avatarPosition[2]
     );
 
-    targetLookAt.current.lerp(lookAtPos, smoothness * 2);
-    camera.lookAt(targetLookAt.current);
+    // Smoothed target position
+    const newTarget = prevTarget.current.clone().lerp(avatarVec, smoothness);
+
+    // Move camera by the same delta so relative orbit offset is preserved
+    const delta = newTarget.clone().sub(prevTarget.current);
+    camera.position.add(delta);
+
+    // Update orbit target
+    controlsRef.current.target.copy(newTarget);
+    prevTarget.current.copy(newTarget);
   });
 
-  return null;
+  return (
+    <OrbitControls
+      ref={controlsRef}
+      enablePan={false}
+      enableDamping
+      dampingFactor={0.1}
+      minDistance={minDistance}
+      maxDistance={maxDistance}
+      maxPolarAngle={Math.PI / 2.2}
+      minPolarAngle={0.2}
+    />
+  );
 }
 
 export default FollowCamera;

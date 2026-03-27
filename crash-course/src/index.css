@@ -5,7 +5,7 @@
 
 /* Custom Theme Configuration for Tailwind v4 */
 @theme {
-  /* Overcooked Academic Color Palette */
+  /* Refined Professional Color Palette */
   --color-primary-50: #eef2ff;
   --color-primary-100: #e0e7ff;
   --color-primary-200: #c7d2fe;
@@ -42,8 +42,8 @@
   --color-error-500: #f43f5e;
   --color-error-600: #e11d48;
 
-  --color-game-bg: #1e293b;
-  --color-game-surface: #334155;
+  --color-game-bg: #0f172a;
+  --color-game-surface: #1e293b;
   --color-game-light: #f8fafc;
 
   /* Font families */
@@ -51,13 +51,13 @@
   --font-body: 'Inter', system-ui, sans-serif;
 
   /* Border radius */
-  --radius-game: 1rem;
-  --radius-game-lg: 1.5rem;
+  --radius-game: 0.75rem;
+  --radius-game-lg: 1rem;
 
-  /* Shadows */
-  --shadow-game: 0 4px 14px 0 rgba(0, 0, 0, 0.1);
-  --shadow-game-hover: 0 6px 20px 0 rgba(0, 0, 0, 0.15);
-  --shadow-game-active: 0 2px 8px 0 rgba(0, 0, 0, 0.1);
+  /* Shadows - refined, softer */
+  --shadow-game: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06);
+  --shadow-game-hover: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+  --shadow-game-active: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 
   /* Custom keyframes */
   --animate-float: float 3s ease-in-out infinite;
@@ -73,13 +73,15 @@
 /* Base styles */
 html {
   font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background-color: var(--color-game-light);
-  color: #111827;
+  background-color: #f8fafc;
+  color: #0f172a;
 }
 
 #root {
@@ -93,16 +95,17 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Utility classes */
 .btn {
-  padding: 0.75rem 1.5rem;
+  padding: 0.625rem 1.25rem;
   border-radius: var(--radius-game);
   font-weight: 600;
+  font-size: 0.875rem;
   transition: all 0.2s;
   box-shadow: var(--shadow-game);
 }
 
 .btn:hover {
   box-shadow: var(--shadow-game-hover);
-  transform: translateY(-2px);
+  transform: translateY(-1px);
 }
 
 .btn:active {
@@ -142,7 +145,7 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: var(--radius-game-lg);
   box-shadow: var(--shadow-game);
   padding: 1.5rem;
-  border: 1px solid #f3f4f6;
+  border: 1px solid #f1f5f9;
 }
 
 .card-game {
@@ -150,7 +153,7 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: var(--radius-game-lg);
   box-shadow: var(--shadow-game);
   padding: 1.5rem;
-  border: 1px solid #374151;
+  border: 1px solid #334155;
   color: white;
 }
 
@@ -158,15 +161,15 @@ h1, h2, h3, h4, h5, h6 {
 .game-panel {
   position: fixed;
   background-color: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(12px);
   border-radius: var(--radius-game-lg);
-  box-shadow: var(--shadow-game);
-  border: 2px solid var(--color-primary-200);
+  box-shadow: var(--shadow-game-hover);
+  border: 1px solid rgba(226, 232, 240, 0.6);
 }
 
 .progress-bar {
-  height: 1rem;
-  background-color: #e5e7eb;
+  height: 0.75rem;
+  background-color: #f1f5f9;
   border-radius: 9999px;
   overflow: hidden;
 }
@@ -181,10 +184,10 @@ h1, h2, h3, h4, h5, h6 {
 /* Health bar for bosses */
 .health-bar {
   height: 1.5rem;
-  background-color: #d1d5db;
+  background-color: #e2e8f0;
   border-radius: 9999px;
   overflow: hidden;
-  border: 2px solid #9ca3af;
+  border: 2px solid #cbd5e1;
 }
 
 .health-fill {
@@ -196,8 +199,8 @@ h1, h2, h3, h4, h5, h6 {
 
 /* XP bar */
 .xp-bar {
-  height: 0.75rem;
-  background-color: #e5e7eb;
+  height: 0.625rem;
+  background-color: #f1f5f9;
   border-radius: 9999px;
   overflow: hidden;
 }

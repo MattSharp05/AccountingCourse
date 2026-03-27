@@ -1,31 +1,40 @@
-import { Suspense, useEffect, useCallback, useState } from 'react';
+import { Suspense, useEffect, useCallback, useState, useMemo, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Physics, RigidBody, CuboidCollider } from '@react-three/rapier';
 import { KeyboardControls, useKeyboardControls } from '@react-three/drei';
-import { useNavigate } from 'react-router-dom';
+import { EffectComposer, Bloom, N8AO, Vignette, BrightnessContrast, ToneMapping } from '@react-three/postprocessing';
+import { BlendFunction } from 'postprocessing';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   Canvas3DErrorBoundary,
   GameLoading,
   Button,
   XpBar,
   Modal,
+  Loading,
 } from '../components/ui';
 import {
   MapEnvironment,
-  FloatingDecorations,
-  MapTerrain,
   ContentNode3D,
-  PathRenderer,
+  WorldDecorator,
   Avatar,
   FollowCamera,
   InteractionPrompt,
 } from '../components/game';
+import { MiniMap, MapOverviewModal } from '../components/game/MapOverview';
+import type { TerrainData } from '../components/game/worldDecorator/WorldDecorator';
 import { VideoPlayer, ReadingPanel, ExerciseModal } from '../components/content';
 import { QuizBattle } from '../components/quiz';
+import type { BattleQuestion } from '../components/quiz';
 import { ChatWidget } from '../components/chat';
-import { useGameStore, useCompletedNodes, useIsContentOpen, useCurrentNode } from '../stores';
+import { useGameStore, useCompletedNodes, useIsContentOpen, useCurrentNode, useAvatarPosition } from '../stores';
+import { usePublicMap, usePublicContentItem } from '../hooks';
+import type { ContentNode } from '../types/game';
 import { xpToNextLevel } from '../types/game';
-import { MODULE_1_NODES, isNodeUnlocked, getModule1Progress } from '../features/module1/nodes';
+import { mapConfigToGameNodes, isNodeUnlocked, getMapProgress } from '../utils/mapConfigToGameNodes';
+
+// Hardcoded fallback for /game route (backward compat)
+import { MODULE_1_NODES, isNodeUnlocked as isModule1NodeUnlocked, getModule1Progress } from '../features/module1/nodes';
 import { getNodeContent } from '../features/module1/content';
 import { getQuizQuestions, getBossConfig } from '../features/module1/quizzes';
 
@@ -42,26 +51,64 @@ const keyboardMap = [
 
 export function GameMap() {
   const navigate = useNavigate();
-  const { playerProgress, loadProgress, setCurrentNode, openContent, closeContent } = useGameStore();
+  const { mapId } = useParams<{ mapId: string }>();
+  const { playerProgress, loadProgress, resetProgress, setCurrentNode, openContent, closeContent } = useGameStore();
   const completedNodes = useCompletedNodes();
   const isContentOpen = useIsContentOpen();
   const currentNodeId = useCurrentNode();
   const xpInfo = xpToNextLevel(playerProgress.xp);
 
+  // Fetch map from Supabase if mapId is present
+  const { data: mapData, isLoading: mapLoading, error: mapError } = usePublicMap(mapId || '');
+
+  // Determine which mode we're in
+  const isDataDriven = !!mapId;
+
+  // Convert map config nodes to game nodes
+  const nodes: ContentNode[] = useMemo(() => {
+    if (isDataDriven && mapData?.mapConfig) {
+      return mapConfigToGameNodes(mapData.mapConfig.nodes);
+    }
+    if (!isDataDriven) {
+      return MODULE_1_NODES;
+    }
+    return [];
+  }, [isDataDriven, mapData]);
+
+  const mapTitle = isDataDriven ? (mapData?.title || 'Loading...') : 'Module 1: Financial Statements Intro';
+
   // Track which node the player is near
   const [nearbyNodeId, setNearbyNodeId] = useState<string | null>(null);
+
+  // Mini-map / map overview modal
+  const [mapModalOpen, setMapModalOpen] = useState(false);
+  const avatarPos = useAvatarPosition();
 
   useEffect(() => {
     loadProgress();
   }, [loadProgress]);
 
+  const startNodeId = isDataDriven ? mapData?.mapConfig?.startNodeId : undefined;
+
+  const checkUnlocked = useCallback((nodeId: string) => {
+    if (isDataDriven) {
+      const result = isNodeUnlocked(nodeId, nodes, completedNodes, startNodeId);
+      const node = nodes.find(n => n.id === nodeId);
+      if (node && node.prerequisites.length > 0 && !result) {
+        console.log('[checkUnlocked] LOCKED:', nodeId, 'prereqs:', node.prerequisites, 'completed:', completedNodes);
+      }
+      return result;
+    }
+    return isModule1NodeUnlocked(nodeId, completedNodes);
+  }, [isDataDriven, nodes, completedNodes, startNodeId]);
+
   const handleNodeInteract = useCallback((nodeId: string) => {
-    const node = MODULE_1_NODES.find(n => n.id === nodeId);
-    if (node && isNodeUnlocked(nodeId, completedNodes)) {
+    const node = nodes.find(n => n.id === nodeId);
+    if (node && checkUnlocked(nodeId)) {
       setCurrentNode(nodeId);
       openContent();
     }
-  }, [setCurrentNode, openContent, completedNodes]);
+  }, [nodes, checkUnlocked, setCurrentNode, openContent]);
 
   const handleNodeProximity = useCallback((nodeId: string | null) => {
     setNearbyNodeId(nodeId);
@@ -73,14 +120,44 @@ export function GameMap() {
     }
   }, [nearbyNodeId, handleNodeInteract]);
 
-  const currentNode = MODULE_1_NODES.find((n) => n.id === currentNodeId);
-  const nearbyNode = MODULE_1_NODES.find((n) => n.id === nearbyNodeId);
-  const moduleProgress = getModule1Progress(completedNodes);
+  const currentNode = nodes.find((n) => n.id === currentNodeId);
+  const nearbyNode = nodes.find((n) => n.id === nearbyNodeId);
+  const progress = isDataDriven
+    ? getMapProgress(nodes, completedNodes)
+    : getModule1Progress(completedNodes);
 
   // Get nearby node title for prompt (only if unlocked)
-  const nearbyNodeTitle = nearbyNode && isNodeUnlocked(nearbyNode.id, completedNodes)
+  const nearbyNodeTitle = nearbyNode && checkUnlocked(nearbyNode.id)
     ? nearbyNode.title
     : null;
+
+  // Loading state for data-driven maps
+  if (isDataDriven && mapLoading) {
+    return (
+      <div className="w-full h-screen flex items-center justify-center bg-[#1e293b]">
+        <GameLoading message="Loading map..." />
+      </div>
+    );
+  }
+
+  // Error state
+  if (isDataDriven && (mapError || !mapData?.mapConfig)) {
+    return (
+      <div className="w-full h-screen flex items-center justify-center bg-[#1e293b]">
+        <div className="text-center">
+          <h2 className="text-xl font-bold text-white mb-2">
+            {mapError ? 'Failed to load map' : 'Map not built yet'}
+          </h2>
+          <p className="text-gray-400 mb-6">
+            {mapError ? 'This map may not exist or is not published.' : 'The professor hasn\'t built this map yet.'}
+          </p>
+          <Button onClick={() => navigate('/')} variant="primary">
+            Go Home
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-screen relative bg-[#1e293b]">
@@ -95,17 +172,49 @@ export function GameMap() {
             <Suspense fallback={null}>
               <Physics gravity={[0, -20, 0]}>
                 <MapScene
+                  nodes={nodes}
+                  edges={isDataDriven ? mapData?.mapConfig?.edges : undefined}
+                  startNodeId={startNodeId}
                   onNodeInteract={handleNodeInteract}
                   onNodeProximity={handleNodeProximity}
                   completedNodes={completedNodes}
+                  checkUnlocked={checkUnlocked}
                 />
                 {/* Keyboard interaction listener inside Canvas */}
                 <InteractionListener
                   nearbyNodeId={nearbyNodeId}
-                  completedNodes={completedNodes}
+                  checkUnlocked={checkUnlocked}
                   onInteract={handleNodeInteract}
                 />
               </Physics>
+
+              {/* Post-processing: Fortnite-style vibrant look */}
+              <EffectComposer multisampling={4}>
+                <N8AO
+                  aoRadius={0.8}
+                  intensity={1.2}
+                  distanceFalloff={0.8}
+                />
+                <Bloom
+                  luminanceThreshold={0.7}
+                  luminanceSmoothing={0.3}
+                  intensity={0.5}
+                  mipmapBlur
+                />
+                <BrightnessContrast
+                  brightness={0.02}
+                  contrast={0.1}
+                />
+                <Vignette
+                  offset={0.35}
+                  darkness={0.45}
+                  blendFunction={BlendFunction.NORMAL}
+                />
+                <ToneMapping
+                  blendFunction={BlendFunction.NORMAL}
+                  adaptive={true}
+                />
+              </EffectComposer>
             </Suspense>
           </Canvas>
         </KeyboardControls>
@@ -130,21 +239,15 @@ export function GameMap() {
             ← Back
           </Button>
 
-          {/* XP Bar */}
-          <div className="bg-white/90 backdrop-blur-sm rounded-[1rem] p-3 min-w-[200px]">
-            <XpBar
-              currentXp={xpInfo.current}
-              requiredXp={xpInfo.required}
-              level={playerProgress.level}
-            />
-          </div>
+          {/* Spacer to keep top bar layout balanced */}
+          <div />
         </div>
 
-        {/* Module indicator */}
+        {/* Map title indicator */}
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2">
           <div className="bg-[#4f46e5] text-white px-6 py-2 rounded-full font-bold shadow-lg">
-            Module 1: Financial Statements Intro
-            <span className="ml-3 text-sm opacity-80">{moduleProgress}%</span>
+            {mapTitle}
+            <span className="ml-3 text-sm opacity-80">{progress}%</span>
           </div>
         </div>
 
@@ -162,27 +265,40 @@ export function GameMap() {
           </div>
         </div>
 
-        {/* Legend */}
-        <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm rounded-lg p-3 text-sm">
-          <div className="font-semibold mb-2">Legend</div>
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-3 h-3 rounded-full bg-[#4F46E5]" />
-            <span>Video</span>
-          </div>
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-3 h-3 rounded-full bg-[#0891b2]" />
-            <span>Reading</span>
-          </div>
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-3 h-3 rounded-full bg-[#059669]" />
-            <span>Exercise</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-[#dc2626]" />
-            <span>Quiz Boss</span>
-          </div>
-        </div>
       </div>
+
+      {/* Mini-map overlay (bottom-left) */}
+      <MiniMap
+        nodes={nodes}
+        edges={isDataDriven ? mapData?.mapConfig?.edges : undefined}
+        completedNodeIds={completedNodes}
+        nearbyNodeId={nearbyNodeId}
+        avatarPosition={avatarPos}
+        mapTitle={mapTitle}
+        progress={progress}
+        onOpenFullMap={() => setMapModalOpen(true)}
+      />
+
+      {/* Full map overview modal */}
+      <MapOverviewModal
+        isOpen={mapModalOpen}
+        onClose={() => setMapModalOpen(false)}
+        nodes={nodes}
+        edges={isDataDriven ? mapData?.mapConfig?.edges : undefined}
+        completedNodeIds={completedNodes}
+        nearbyNodeId={nearbyNodeId}
+        avatarPosition={avatarPos}
+        mapTitle={mapTitle}
+        progress={progress}
+        onNodeSelect={(nodeId) => {
+          const node = nodes.find(n => n.id === nodeId);
+          if (node) {
+            useGameStore.getState().teleportTo(node.position);
+          }
+          handleNodeInteract(nodeId);
+          setMapModalOpen(false);
+        }}
+      />
 
       {/* Interaction Prompt */}
       <InteractionPrompt
@@ -198,14 +314,25 @@ export function GameMap() {
         size="lg"
       >
         {currentNode && (
-          <ContentViewer
-            node={currentNode}
-            onComplete={() => {
-              useGameStore.getState().completeNode(currentNode.id);
-              useGameStore.getState().addXp(currentNode.xpReward);
-              closeContent();
-            }}
-          />
+          isDataDriven ? (
+            <DataDrivenContentViewer
+              node={currentNode}
+              onComplete={() => {
+                useGameStore.getState().completeNode(currentNode.id);
+                useGameStore.getState().addXp(currentNode.xpReward);
+                closeContent();
+              }}
+            />
+          ) : (
+            <LegacyContentViewer
+              node={currentNode}
+              onComplete={() => {
+                useGameStore.getState().completeNode(currentNode.id);
+                useGameStore.getState().addXp(currentNode.xpReward);
+                closeContent();
+              }}
+            />
+          )
         )}
       </Modal>
 
@@ -215,98 +342,120 @@ export function GameMap() {
   );
 }
 
-// Component to listen for E key press inside the Canvas
+// ── Interaction Listener (E key inside Canvas) ──────────
+
 function InteractionListener({
   nearbyNodeId,
-  completedNodes,
+  checkUnlocked,
   onInteract,
 }: {
   nearbyNodeId: string | null;
-  completedNodes: string[];
+  checkUnlocked: (nodeId: string) => boolean;
   onInteract: (nodeId: string) => void;
 }) {
   const [, getKeys] = useKeyboardControls();
   const [wasPressed, setWasPressed] = useState(false);
 
-  // Use frame to check for key press
   const { interact } = getKeys() as { interact: boolean };
 
   useEffect(() => {
     if (interact && !wasPressed && nearbyNodeId) {
-      if (isNodeUnlocked(nearbyNodeId, completedNodes)) {
+      if (checkUnlocked(nearbyNodeId)) {
         onInteract(nearbyNodeId);
       }
       setWasPressed(true);
     } else if (!interact && wasPressed) {
       setWasPressed(false);
     }
-  }, [interact, wasPressed, nearbyNodeId, completedNodes, onInteract]);
+  }, [interact, wasPressed, nearbyNodeId, checkUnlocked, onInteract]);
 
   return null;
 }
 
-// The 3D scene with all elements
+// ── 3D Scene ────────────────────────────────────────────
+
 interface MapSceneProps {
+  nodes: ContentNode[];
+  edges?: { source: string; target: string }[];
+  startNodeId?: string;
   onNodeInteract: (nodeId: string) => void;
   onNodeProximity: (nodeId: string | null) => void;
   completedNodes: string[];
+  checkUnlocked: (nodeId: string) => boolean;
 }
 
-function MapScene({ onNodeInteract, onNodeProximity, completedNodes }: MapSceneProps) {
+function MapScene({ nodes, edges, startNodeId, onNodeInteract, onNodeProximity, completedNodes, checkUnlocked }: MapSceneProps) {
+  const avatarPosition = useAvatarPosition();
+  const [terrainData, setTerrainData] = useState<TerrainData | null>(null);
+
+  // Stable callback ref to avoid re-triggering WorldDecorator effect
+  const terrainCbRef = useRef<(data: TerrainData) => void>((data) => setTerrainData(data));
+
+  // Start node = explicit startNodeId, or fall back to first node with no prerequisites
+  const startNode = useMemo(
+    () => (startNodeId ? nodes.find((n) => n.id === startNodeId) : null)
+      ?? nodes.find((n) => n.prerequisites.length === 0),
+    [nodes, startNodeId],
+  );
+  const spawnPosition = useMemo<[number, number, number]>(
+    () => startNode ? [startNode.position[0], startNode.position[1] + 1.5, startNode.position[2] + 2] : [0, 2, 0],
+    [startNode],
+  );
+
   return (
     <>
-      {/* Environment (lighting, sky, clouds) */}
-      <MapEnvironment />
+      {/* Scene fog — soft green haze */}
+      <fog attach="fog" args={['#c8dbb6', 30, 80]} />
 
-      {/* Floating decorations */}
-      <FloatingDecorations />
+      <MapEnvironment avatarPosition={avatarPosition} />
 
-      {/* Terrain (ground, paths, buildings) */}
-      <MapTerrain />
-
-      {/* Physics ground */}
-      <RigidBody type="fixed" colliders={false}>
-        <CuboidCollider args={[50, 0.1, 50]} position={[0, -0.1, 0]} />
-      </RigidBody>
-
-      {/* Invisible boundary walls */}
-      <Boundaries />
-
-      {/* Path connections between nodes */}
-      <PathRenderer
-        nodes={MODULE_1_NODES}
+      {/* World: terrain + decorations + paths + mountains */}
+      <WorldDecorator
+        nodes={nodes}
+        edges={edges}
         completedNodeIds={completedNodes}
+        onTerrainReady={terrainCbRef.current}
       />
 
-      {/* Content nodes */}
-      {MODULE_1_NODES.map((node) => (
+      {/* Flat ground collider as safety net */}
+      <RigidBody type="fixed" colliders={false}>
+        <CuboidCollider args={[50, 0.1, 50]} position={[0, -0.5, 0]} />
+      </RigidBody>
+
+      <Boundaries />
+
+      {nodes.map((node) => (
         <ContentNode3D
           key={node.id}
           node={node}
-          isUnlocked={isNodeUnlocked(node.id, completedNodes)}
+          isUnlocked={checkUnlocked(node.id)}
+          isStart={startNode?.id === node.id}
           onInteract={() => onNodeInteract(node.id)}
+          allNodes={nodes}
+          edges={edges}
+          completedNodeIds={completedNodes}
         />
       ))}
 
-      {/* Player avatar */}
       <Avatar
-        nodes={MODULE_1_NODES.filter(n => isNodeUnlocked(n.id, completedNodes))}
+        nodes={nodes.filter(n => checkUnlocked(n.id))}
         onNodeProximity={onNodeProximity}
+        spawnPosition={spawnPosition}
+        heightFn={terrainData?.heightFn}
       />
 
-      {/* Camera follows avatar */}
-      <FollowCamera offset={[0, 10, 15]} smoothness={0.08} />
+      <FollowCamera />
     </>
   );
 }
 
-// Invisible boundary walls to keep player in bounds
+// ── Boundaries ──────────────────────────────────────────
+
 function Boundaries() {
   const radius = 22;
 
   return (
     <group>
-      {/* Four walls at the edges */}
       <RigidBody type="fixed" colliders={false}>
         <CuboidCollider args={[radius, 5, 0.5]} position={[0, 2.5, -radius]} />
         <CuboidCollider args={[radius, 5, 0.5]} position={[0, 2.5, radius]} />
@@ -317,25 +466,45 @@ function Boundaries() {
   );
 }
 
-// Content viewer component that uses real content components
-function ContentViewer({
+// ── Data-Driven Content Viewer (Supabase) ───────────────
+
+function DataDrivenContentViewer({
   node,
   onComplete,
 }: {
-  node: (typeof MODULE_1_NODES)[0];
+  node: ContentNode;
   onComplete: () => void;
 }) {
-  const nodeContent = getNodeContent(node.id);
+  const { data: contentItem, isLoading } = usePublicContentItem(node.id);
 
-  // Video content
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loading text="Loading content..." />
+      </div>
+    );
+  }
+
+  if (!contentItem) {
+    return (
+      <div className="space-y-4 text-center py-8">
+        <p className="text-gray-500">Content not available yet.</p>
+        <Button onClick={onComplete} variant="secondary">
+          Mark Complete →
+        </Button>
+      </div>
+    );
+  }
+
+  // Video
   if (node.type === 'video') {
     return (
       <div className="space-y-4">
         <p className="text-gray-600 mb-4">{node.description}</p>
         <VideoPlayer
           title={node.title}
+          videoUrl={contentItem.fileUrl}
           onComplete={onComplete}
-          // videoUrl will be added when we have real video content
         />
         <div className="text-sm text-gray-500 text-center">
           Reward: <span className="font-semibold text-amber-600">+{node.xpReward} XP</span>
@@ -344,7 +513,148 @@ function ContentViewer({
     );
   }
 
-  // Reading content
+  // Reading (pdf or text)
+  if (node.type === 'reading') {
+    // If the content item has a file URL (PDF), embed it
+    if (contentItem.fileUrl) {
+      return (
+        <div className="space-y-4">
+          <iframe
+            src={contentItem.fileUrl}
+            className="w-full rounded-lg border border-gray-200"
+            style={{ height: '70vh' }}
+            title={node.title}
+          />
+          <div className="flex justify-between items-center pt-2 border-t">
+            <div className="text-sm text-gray-500">
+              Reward: <span className="font-semibold text-amber-600">+{node.xpReward} XP</span>
+            </div>
+            <Button onClick={onComplete} variant="primary">
+              Mark Complete →
+            </Button>
+          </div>
+        </div>
+      );
+    }
+    // Otherwise render as text/markdown
+    return (
+      <ReadingPanel
+        title={node.title}
+        content={contentItem.textContent || `# ${node.title}\n\n${node.description}\n\nContent coming soon...`}
+        estimatedReadTime={5}
+        onComplete={onComplete}
+      />
+    );
+  }
+
+  // Exercise (file)
+  if (node.type === 'exercise') {
+    return (
+      <div className="space-y-4">
+        <p className="text-gray-600">{node.description}</p>
+        {contentItem.fileUrl && (
+          <a
+            href={contentItem.fileUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors"
+          >
+            📎 Download Exercise File
+          </a>
+        )}
+        <div className="flex justify-between items-center pt-4 border-t">
+          <div className="text-sm text-gray-500">
+            Reward: <span className="font-semibold text-amber-600">+{node.xpReward} XP</span>
+          </div>
+          <Button onClick={onComplete} variant="primary">
+            Mark Complete →
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Quiz boss
+  if (node.type === 'quiz-boss') {
+    if (!contentItem.quizData || !contentItem.quizData.questions?.length) {
+      return (
+        <div className="text-center py-8">
+          <div className="text-6xl mb-4">🔮</div>
+          <h3 className="text-xl font-bold text-gray-700 mb-2">Quiz Coming Soon</h3>
+          <p className="text-gray-500 mb-6">Questions are being prepared for this battle.</p>
+          <Button onClick={onComplete} variant="secondary">
+            Continue →
+          </Button>
+        </div>
+      );
+    }
+
+    const questions: BattleQuestion[] = contentItem.quizData.questions.map((q) => ({
+      id: q.id,
+      question: q.question,
+      options: q.options,
+      correctAnswer: q.correctIndex,
+      explanation: '',
+      difficulty: 'medium' as const,
+      topic: 'general',
+    }));
+
+    return (
+      <QuizBattle
+        bossName={contentItem.quizData.bossName || 'Quiz Boss'}
+        bossEmoji={contentItem.quizData.bossEmoji || '👾'}
+        questions={questions}
+        passingScore={contentItem.quizData.passingScore}
+        onComplete={(result) => {
+          if (result.victory) {
+            onComplete();
+          } else {
+            useGameStore.getState().closeContent();
+          }
+        }}
+      />
+    );
+  }
+
+  // Fallback
+  return (
+    <div className="space-y-4">
+      <p className="text-gray-600">{node.description}</p>
+      <div className="flex justify-between items-center pt-4 border-t">
+        <div className="text-sm text-gray-500">
+          Reward: <span className="font-semibold text-amber-600">+{node.xpReward} XP</span>
+        </div>
+        <Button onClick={onComplete} variant="primary">
+          Mark Complete →
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ── Legacy Content Viewer (hardcoded Module 1) ──────────
+
+function LegacyContentViewer({
+  node,
+  onComplete,
+}: {
+  node: ContentNode;
+  onComplete: () => void;
+}) {
+  const nodeContent = getNodeContent(node.id);
+
+  if (node.type === 'video') {
+    return (
+      <div className="space-y-4">
+        <p className="text-gray-600 mb-4">{node.description}</p>
+        <VideoPlayer title={node.title} onComplete={onComplete} />
+        <div className="text-sm text-gray-500 text-center">
+          Reward: <span className="font-semibold text-amber-600">+{node.xpReward} XP</span>
+        </div>
+      </div>
+    );
+  }
+
   if (node.type === 'reading') {
     return (
       <ReadingPanel
@@ -356,7 +666,6 @@ function ContentViewer({
     );
   }
 
-  // Exercise content
   if (node.type === 'exercise' && nodeContent?.exerciseQuestions) {
     return (
       <ExerciseModal
@@ -364,7 +673,6 @@ function ContentViewer({
         instructions={nodeContent.exerciseInstructions || 'Complete the following questions to test your understanding.'}
         questions={nodeContent.exerciseQuestions}
         onComplete={(score) => {
-          // For exercises, we complete even with low scores but could track for analytics
           console.log(`Exercise completed with score: ${score}%`);
           onComplete();
         }}
@@ -372,12 +680,10 @@ function ContentViewer({
     );
   }
 
-  // Quiz boss - full battle system
   if (node.type === 'quiz-boss') {
     const questions = getQuizQuestions(node.id);
     const bossConfig = getBossConfig(node.id);
 
-    // If no questions, show placeholder
     if (questions.length === 0) {
       return (
         <div className="text-center py-8">
@@ -401,7 +707,6 @@ function ContentViewer({
           if (result.victory) {
             onComplete();
           } else {
-            // On defeat, just close the modal - they can try again
             useGameStore.getState().closeContent();
           }
         }}
@@ -409,7 +714,6 @@ function ContentViewer({
     );
   }
 
-  // Fallback for any other content type
   return (
     <div className="space-y-4">
       <p className="text-gray-600">{node.description}</p>

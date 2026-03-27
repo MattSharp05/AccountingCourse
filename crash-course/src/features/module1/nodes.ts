@@ -9,7 +9,7 @@ export const MODULE_1_NODES: ContentNode[] = [
     type: 'video',
     title: 'Welcome to Financial Statements',
     description: 'Introduction to the course and what you will learn',
-    position: [-5, 0.5, -5],
+    position: [0, 0.5, 10], // Start at bottom
     prerequisites: [], // First node, no prerequisites
     xpReward: 50,
     moduleId: 1,
@@ -19,7 +19,7 @@ export const MODULE_1_NODES: ContentNode[] = [
     type: 'reading',
     title: 'What Are Financial Statements?',
     description: 'Overview of the three main financial statements and their purposes',
-    position: [-2, 0.5, -3],
+    position: [3, 0.5, 6], // Zig right
     prerequisites: ['m1-welcome'],
     xpReward: 75,
     moduleId: 1,
@@ -29,7 +29,7 @@ export const MODULE_1_NODES: ContentNode[] = [
     type: 'video',
     title: 'The Balance Sheet',
     description: 'Learn about assets, liabilities, and equity',
-    position: [2, 0.5, -4],
+    position: [-2, 0.5, 2], // Zag left
     prerequisites: ['m1-what-are-fs'],
     xpReward: 100,
     moduleId: 1,
@@ -39,7 +39,7 @@ export const MODULE_1_NODES: ContentNode[] = [
     type: 'exercise',
     title: 'Balance Sheet Practice',
     description: 'Practice identifying balance sheet items',
-    position: [5, 0.5, -2],
+    position: [4, 0.5, -2], // Zig right
     prerequisites: ['m1-balance-sheet-intro'],
     xpReward: 100,
     moduleId: 1,
@@ -49,7 +49,7 @@ export const MODULE_1_NODES: ContentNode[] = [
     type: 'reading',
     title: 'The Income Statement',
     description: 'Understanding revenue, expenses, and net income',
-    position: [3, 0.5, 2],
+    position: [-3, 0.5, -6], // Zag left
     prerequisites: ['m1-balance-sheet-exercise'],
     xpReward: 100,
     moduleId: 1,
@@ -59,7 +59,7 @@ export const MODULE_1_NODES: ContentNode[] = [
     type: 'quiz-boss',
     title: 'Quiz Boss: Balance & Income',
     description: 'Test your knowledge of balance sheets and income statements',
-    position: [-1, 0.5, 4],
+    position: [5, 0.5, -10], // Zig right
     prerequisites: ['m1-income-statement'],
     xpReward: 200,
     moduleId: 1,
@@ -69,7 +69,7 @@ export const MODULE_1_NODES: ContentNode[] = [
     type: 'video',
     title: 'The Cash Flow Statement',
     description: 'Operating, investing, and financing activities',
-    position: [-4, 0.5, 3],
+    position: [-4, 0.5, -14], // Zag left
     prerequisites: ['m1-quiz-checkpoint'],
     xpReward: 100,
     moduleId: 1,
@@ -79,7 +79,7 @@ export const MODULE_1_NODES: ContentNode[] = [
     type: 'quiz-boss',
     title: 'Module 1 Boss: Financial Foundations',
     description: 'Defeat this boss to complete Module 1!',
-    position: [0, 0.5, 7],
+    position: [6, 0.5, -18], // Zig right - furthest forward
     prerequisites: ['m1-cash-flow'],
     xpReward: 500,
     moduleId: 1,

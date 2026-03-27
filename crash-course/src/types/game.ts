@@ -15,6 +15,8 @@ export interface ContentNode {
   prerequisites: string[];
   xpReward: number;
   moduleId: number;
+  groupId?: string;
+  groupColor?: string;
 }
 
 export interface PlayerProgress {
@@ -38,6 +40,7 @@ export interface GameState {
   currentModule: number;
   currentNodeId: string | null;
   isContentOpen: boolean;
+  teleportTarget: Vector3 | null;
 
   // Player data
   playerProgress: PlayerProgress;
@@ -52,6 +55,8 @@ export interface GameState {
   addXp: (amount: number) => void;
   updateAvatarPosition: (position: Vector3) => void;
   updateAvatarAnimation: (animation: AvatarState['animation']) => void;
+  teleportTo: (position: Vector3) => void;
+  clearTeleportTarget: () => void;
 
   // Persistence
   saveProgress: () => void;

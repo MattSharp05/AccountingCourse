@@ -1,163 +1,86 @@
 import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Sky, Cloud, Float } from '@react-three/drei';
+import { Sky, Environment } from '@react-three/drei';
 import * as THREE from 'three';
 
-export function MapEnvironment() {
+interface MapEnvironmentProps {
+  avatarPosition?: [number, number, number] | null;
+}
+
+export function MapEnvironment({ avatarPosition }: MapEnvironmentProps) {
+  const lightRef = useRef<THREE.DirectionalLight>(null);
+
+  // Shadow camera follows avatar for tight shadow coverage
+  useFrame(() => {
+    if (!lightRef.current || !avatarPosition) return;
+    const [ax, , az] = avatarPosition;
+    const shadowRadius = 15;
+
+    // Move light to follow avatar
+    lightRef.current.position.set(ax + 15, 25, az + 10);
+    lightRef.current.target.position.set(ax, 0, az);
+    lightRef.current.target.updateMatrixWorld();
+
+    // Update shadow camera bounds
+    const cam = lightRef.current.shadow.camera;
+    cam.left = -shadowRadius;
+    cam.right = shadowRadius;
+    cam.top = shadowRadius;
+    cam.bottom = -shadowRadius;
+    cam.updateProjectionMatrix();
+  });
+
   return (
     <>
-      {/* Ambient light for overall illumination */}
+      {/* Environment map for subtle reflections */}
+      <Environment preset="park" environmentIntensity={0.3} />
+
+      {/* Ambient light */}
       <ambientLight intensity={0.6} color="#fffaf0" />
 
-      {/* Main directional light (sun) */}
+      {/* Main directional light (sun) — follows avatar */}
       <directionalLight
+        ref={lightRef}
         position={[15, 25, 10]}
-        intensity={1.2}
+        intensity={1.8}
         color="#fff5e6"
         castShadow
         shadow-mapSize={[2048, 2048]}
-        shadow-camera-far={50}
-        shadow-camera-left={-20}
-        shadow-camera-right={20}
-        shadow-camera-top={20}
-        shadow-camera-bottom={-20}
+        shadow-camera-far={60}
+        shadow-camera-left={-15}
+        shadow-camera-right={15}
+        shadow-camera-top={15}
+        shadow-camera-bottom={-15}
+        shadow-bias={-0.0005}
+        shadow-normalBias={0.02}
       />
 
       {/* Fill light from opposite side */}
       <directionalLight
         position={[-10, 10, -10]}
-        intensity={0.3}
-        color="#e6f0ff"
+        intensity={0.4}
+        color="#b8d4ff"
       />
 
-      {/* Hemisphere light for nice gradient */}
+      {/* Hemisphere light */}
       <hemisphereLight
-        args={['#87CEEB', '#4ade80', 0.6]}
+        args={['#87ceeb', '#4ade80', 0.5]}
         position={[0, 50, 0]}
       />
 
-      {/* Sky with warm sunset colors */}
+      {/* Sky — tuned for deeper blue, cleaner */}
       <Sky
         distance={450000}
         sunPosition={[100, 50, 100]}
         inclination={0.5}
         azimuth={0.25}
-        turbidity={8}
-        rayleigh={1}
+        turbidity={4}
+        rayleigh={2.0}
         mieCoefficient={0.005}
         mieDirectionalG={0.8}
       />
 
-      {/* Decorative clouds */}
-      <CloudSystem />
     </>
-  );
-}
-
-function CloudSystem() {
-  return (
-    <>
-      {/* Floating clouds at different positions */}
-      <Float speed={0.5} rotationIntensity={0.2} floatIntensity={2}>
-        <Cloud
-          position={[-15, 12, -20]}
-          opacity={0.7}
-          speed={0.2}
-          segments={20}
-        />
-      </Float>
-      <Float speed={0.3} rotationIntensity={0.1} floatIntensity={1.5}>
-        <Cloud
-          position={[20, 15, -15]}
-          opacity={0.5}
-          speed={0.1}
-          segments={15}
-        />
-      </Float>
-      <Float speed={0.4} rotationIntensity={0.15} floatIntensity={1.8}>
-        <Cloud
-          position={[0, 18, -25]}
-          opacity={0.6}
-          speed={0.15}
-          segments={18}
-        />
-      </Float>
-    </>
-  );
-}
-
-// Decorative floating elements
-export function FloatingDecorations() {
-  return (
-    <>
-      {/* Floating books */}
-      <FloatingBook position={[-8, 3, -8]} color="#4F46E5" rotation={0.3} />
-      <FloatingBook position={[10, 4, -5]} color="#F59E0B" rotation={-0.5} />
-      <FloatingBook position={[5, 2.5, 8]} color="#10B981" rotation={0.7} />
-
-      {/* Floating coins/gems for visual interest */}
-      <FloatingGem position={[-12, 2, 5]} />
-      <FloatingGem position={[8, 3, -10]} />
-    </>
-  );
-}
-
-function FloatingBook({
-  position,
-  color,
-  rotation = 0,
-}: {
-  position: [number, number, number];
-  color: string;
-  rotation?: number;
-}) {
-  const meshRef = useRef<THREE.Group>(null);
-
-  useFrame((state) => {
-    if (meshRef.current) {
-      meshRef.current.position.y = position[1] + Math.sin(state.clock.elapsedTime * 0.8) * 0.3;
-      meshRef.current.rotation.y = rotation + Math.sin(state.clock.elapsedTime * 0.3) * 0.1;
-    }
-  });
-
-  return (
-    <group ref={meshRef} position={position}>
-      {/* Book body */}
-      <mesh castShadow>
-        <boxGeometry args={[0.8, 1, 0.15]} />
-        <meshStandardMaterial color={color} />
-      </mesh>
-      {/* Pages */}
-      <mesh position={[0, 0, 0.02]}>
-        <boxGeometry args={[0.7, 0.9, 0.1]} />
-        <meshStandardMaterial color="#fffef0" />
-      </mesh>
-    </group>
-  );
-}
-
-function FloatingGem({ position }: { position: [number, number, number] }) {
-  const meshRef = useRef<THREE.Mesh>(null);
-
-  useFrame((state) => {
-    if (meshRef.current) {
-      meshRef.current.position.y = position[1] + Math.sin(state.clock.elapsedTime * 1.2) * 0.2;
-      meshRef.current.rotation.y = state.clock.elapsedTime * 0.5;
-      meshRef.current.rotation.z = Math.sin(state.clock.elapsedTime * 0.4) * 0.1;
-    }
-  });
-
-  return (
-    <mesh ref={meshRef} position={position} castShadow>
-      <octahedronGeometry args={[0.3]} />
-      <meshStandardMaterial
-        color="#fbbf24"
-        emissive="#f59e0b"
-        emissiveIntensity={0.3}
-        metalness={0.8}
-        roughness={0.2}
-      />
-    </mesh>
   );
 }
 

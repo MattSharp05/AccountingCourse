@@ -27,6 +27,7 @@ export const useGameStore = create<GameState>()(
     currentModule: 1,
     currentNodeId: null,
     isContentOpen: false,
+    teleportTarget: null,
     playerProgress: defaultPlayerProgress,
     avatarState: defaultAvatarState,
 
@@ -51,13 +52,16 @@ export const useGameStore = create<GameState>()(
     completeNode: (nodeId) => {
       const { playerProgress } = get();
       if (playerProgress.completedNodes.includes(nodeId)) {
-        return; // Already completed
+        console.log('[gameStore] Node already completed:', nodeId);
+        return;
       }
 
+      const newCompleted = [...playerProgress.completedNodes, nodeId];
+      console.log('[gameStore] Completing node:', nodeId, 'Total completed:', newCompleted.length);
       set({
         playerProgress: {
           ...playerProgress,
-          completedNodes: [...playerProgress.completedNodes, nodeId],
+          completedNodes: newCompleted,
         },
       });
       get().saveProgress();
@@ -94,6 +98,14 @@ export const useGameStore = create<GameState>()(
           animation,
         },
       }));
+    },
+
+    teleportTo: (position) => {
+      set({ teleportTarget: position });
+    },
+
+    clearTeleportTarget: () => {
+      set({ teleportTarget: null });
     },
 
     // Persistence

@@ -9,6 +9,7 @@ import {
   Canvas3DErrorBoundary,
   GameLoading,
   Button,
+  BrandButton,
   Modal,
   Loading,
 } from '../components/ui';
@@ -22,20 +23,17 @@ import {
 } from '../components/game';
 import { MiniMap, MapOverviewModal } from '../components/game/MapOverview';
 import type { TerrainData } from '../components/game/worldDecorator/WorldDecorator';
-import { VideoPlayer, ReadingPanel, ExerciseModal } from '../components/content';
+import { VideoPlayer, ReadingPanel, PdfViewer } from '../components/content';
 import { QuizBattle } from '../components/quiz';
 import type { BattleQuestion } from '../components/quiz';
 import { ChatWidget } from '../components/chat';
+import { useChatStore } from '../stores/chatStore';
 import { useGameStore, useCompletedNodes, useIsContentOpen, useCurrentNode, useAvatarPosition } from '../stores';
-import { usePublicMap, usePublicContentItem } from '../hooks';
+import { usePublicMap, usePublicCheckpointItems } from '../hooks';
 import type { ContentNode } from '../types/game';
-import { xpToNextLevel } from '../types/game';
+import type { ContentItem } from '../types/admin';
+import { normalizeQuizData } from '../types/admin';
 import { mapConfigToGameNodes, isNodeUnlocked, getMapProgress } from '../utils/mapConfigToGameNodes';
-
-// Hardcoded fallback for /game route (backward compat)
-import { MODULE_1_NODES, isNodeUnlocked as isModule1NodeUnlocked, getModule1Progress } from '../features/module1/nodes';
-import { getNodeContent } from '../features/module1/content';
-import { getQuizQuestions, getBossConfig } from '../features/module1/quizzes';
 
 // Keyboard control mapping for avatar
 const keyboardMap = [
@@ -50,32 +48,29 @@ const keyboardMap = [
 
 export function GameMap() {
   const navigate = useNavigate();
-  const { mapId } = useParams<{ mapId: string }>();
-  const { playerProgress, loadProgress, setCurrentNode, openContent, closeContent } = useGameStore();
-  const completedNodes = useCompletedNodes();
+  const { mapId: mapIdParam } = useParams<{ mapId: string }>();
+  // The route is `/game/map/:mapId`, so React Router guarantees this is
+  // present. The fallback empty string would surface a clean error in the
+  // load branch below rather than crashing the hooks.
+  const mapId = mapIdParam ?? '';
+
+  const { loadProgress, setCurrentNode, openContent, closeContent } = useGameStore();
+  const completedNodes = useCompletedNodes(mapId);
   const isContentOpen = useIsContentOpen();
   const currentNodeId = useCurrentNode();
-  const xpInfo = xpToNextLevel(playerProgress.xp);
-  void xpInfo;
 
-  // Fetch map from Supabase if mapId is present
-  const { data: mapData, isLoading: mapLoading, error: mapError } = usePublicMap(mapId || '');
-
-  // Determine which mode we're in
-  const isDataDriven = !!mapId;
+  // Fetch map from Supabase.
+  const { data: mapData, isLoading: mapLoading, error: mapError } = usePublicMap(mapId);
 
   // Convert map config nodes to game nodes
   const nodes: ContentNode[] = useMemo(() => {
-    if (isDataDriven && mapData?.mapConfig) {
+    if (mapData?.mapConfig) {
       return mapConfigToGameNodes(mapData.mapConfig.nodes);
     }
-    if (!isDataDriven) {
-      return MODULE_1_NODES;
-    }
     return [];
-  }, [isDataDriven, mapData]);
+  }, [mapData]);
 
-  const mapTitle = isDataDriven ? (mapData?.title || 'Loading...') : 'Module 1: Financial Statements Intro';
+  const mapTitle = mapData?.title || 'Loading...';
 
   // Track which node the player is near
   const [nearbyNodeId, setNearbyNodeId] = useState<string | null>(null);
@@ -88,19 +83,89 @@ export function GameMap() {
     loadProgress();
   }, [loadProgress]);
 
-  const startNodeId = isDataDriven ? mapData?.mapConfig?.startNodeId : undefined;
-
-  const checkUnlocked = useCallback((nodeId: string) => {
-    if (isDataDriven) {
-      const result = isNodeUnlocked(nodeId, nodes, completedNodes, startNodeId);
-      const node = nodes.find(n => n.id === nodeId);
-      if (node && node.prerequisites.length > 0 && !result) {
-        console.log('[checkUnlocked] LOCKED:', nodeId, 'prereqs:', node.prerequisites, 'completed:', completedNodes);
-      }
-      return result;
+  // Update chat store with map context
+  useEffect(() => {
+    if (mapData) {
+      useChatStore.getState().setContext({
+        mapId: mapId,
+        mapTitle: mapData.title,
+      });
     }
-    return isModule1NodeUnlocked(nodeId, completedNodes);
-  }, [isDataDriven, nodes, completedNodes, startNodeId]);
+  }, [mapId, mapData]);
+
+  const startNodeId = mapData?.mapConfig?.startNodeId;
+
+  // ── Debug: dump prereq graph at load time ─────────────
+  // Confirms that the prereqs persisted in `map_config` actually look like
+  // the checkpoint UUIDs we expect (and not stale canvas-node IDs from an
+  // older buildMap run, etc).
+  useEffect(() => {
+    if (!nodes.length) return;
+    console.log('[GameMap] Loaded', nodes.length, 'nodes. startNodeId:', JSON.stringify(startNodeId));
+    console.table(
+      nodes.map((n) => ({
+        id: n.id,
+        title: n.title,
+        prereqs: n.prerequisites.length === 0 ? '(none)' : n.prerequisites.join(', '),
+      })),
+    );
+  }, [nodes, startNodeId]);
+
+  // ── Debug: per-node unlock summary on every completedNodes change ──
+  // Lets you see exactly which nodes flipped after a completion. If a node
+  // you expected to unlock is still LOCKED here, the issue is data (the
+  // prereq IDs in the table above don't match the IDs in completedNodes).
+  // If they DO match but the 3D node still looks locked, the issue is
+  // a missed re-render — check that ContentNode3D is receiving fresh props.
+  useEffect(() => {
+    if (!nodes.length) return;
+    console.log('[GameMap] completedNodes changed →', JSON.stringify(completedNodes));
+    const summary = nodes.map((n) => {
+      const isStart = startNodeId && n.id === startNodeId;
+      const unlocked = isNodeUnlocked(n.id, nodes, completedNodes, startNodeId);
+      const completedFlag = completedNodes.includes(n.id);
+      const missingPrereqs = n.prerequisites.filter((p) => !completedNodes.includes(p));
+      return {
+        id: n.id,
+        title: n.title,
+        unlocked,
+        completed: completedFlag,
+        isStart: !!isStart,
+        prereqs: n.prerequisites.length === 0 ? '(none)' : n.prerequisites.join(', '),
+        missingPrereqs: missingPrereqs.length === 0 ? '' : missingPrereqs.join(', '),
+      };
+    });
+    console.table(summary);
+    // Warn loudly for nodes that should unlock but don't
+    for (const row of summary) {
+      if (row.missingPrereqs) {
+        console.warn(`[GameMap] "${row.title}" LOCKED — missing prereqs: ${row.missingPrereqs} (has prereqs: ${row.prereqs})`);
+      }
+    }
+  }, [completedNodes, nodes, startNodeId]);
+
+  // Update chat store when student opens a content node
+  useEffect(() => {
+    if (currentNodeId) {
+      const node = nodes.find((n) => n.id === currentNodeId);
+      if (node) {
+        useChatStore.getState().setContext({
+          checkpointId: node.id,
+          checkpointTitle: node.title,
+        });
+      }
+    }
+  }, [currentNodeId, nodes]);
+
+  // NOTE: do not log inside this callback. MapScene subscribes to
+  // avatarPosition (which updates every frame), so checkUnlocked is called
+  // 60×/sec per node. The completedNodes-change effect above already gives
+  // us a per-node unlock summary on every real state change, which is the
+  // diagnostic we actually want.
+  const checkUnlocked = useCallback(
+    (nodeId: string) => isNodeUnlocked(nodeId, nodes, completedNodes, startNodeId),
+    [nodes, completedNodes, startNodeId],
+  );
 
   const handleNodeInteract = useCallback((nodeId: string) => {
     const node = nodes.find(n => n.id === nodeId);
@@ -122,38 +187,41 @@ export function GameMap() {
 
   const currentNode = nodes.find((n) => n.id === currentNodeId);
   const nearbyNode = nodes.find((n) => n.id === nearbyNodeId);
-  const progress = isDataDriven
-    ? getMapProgress(nodes, completedNodes)
-    : getModule1Progress(completedNodes);
+  const progress = getMapProgress(nodes, completedNodes);
 
   // Get nearby node title for prompt (only if unlocked)
   const nearbyNodeTitle = nearbyNode && checkUnlocked(nearbyNode.id)
     ? nearbyNode.title
     : null;
 
-  // Loading state for data-driven maps
-  if (isDataDriven && mapLoading) {
+  // Loading state
+  if (mapLoading) {
     return (
-      <div className="w-full h-screen flex items-center justify-center bg-[#1e293b]">
+      <div className="w-full h-screen flex items-center justify-center bg-brand-dark">
         <GameLoading message="Loading map..." />
       </div>
     );
   }
 
   // Error state
-  if (isDataDriven && (mapError || !mapData?.mapConfig)) {
+  if (mapError || !mapData?.mapConfig) {
     return (
-      <div className="w-full h-screen flex items-center justify-center bg-[#1e293b]">
-        <div className="text-center">
-          <h2 className="text-xl font-bold text-white mb-2">
+      <div className="w-full h-screen flex items-center justify-center bg-cinematic">
+        <div className="text-center max-w-md px-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-brand-accent mb-3">
+            {mapError ? 'Error' : 'Coming soon'}
+          </p>
+          <h2 className="font-display text-3xl font-bold text-white mb-3 tracking-tight">
             {mapError ? 'Failed to load map' : 'Map not built yet'}
           </h2>
-          <p className="text-gray-400 mb-6">
-            {mapError ? 'This map may not exist or is not published.' : 'The professor hasn\'t built this map yet.'}
+          <p className="text-[#9ca3af] mb-8 leading-relaxed">
+            {mapError
+              ? 'This map may not exist or is not published.'
+              : "The professor hasn't built this map yet."}
           </p>
-          <Button onClick={() => navigate('/')} variant="primary">
-            Go Home
-          </Button>
+          <BrandButton onClick={() => navigate('/home')} variant="primary" glow>
+            Back to courses
+          </BrandButton>
         </div>
       </div>
     );
@@ -173,7 +241,7 @@ export function GameMap() {
               <Physics gravity={[0, -20, 0]}>
                 <MapScene
                   nodes={nodes}
-                  edges={isDataDriven ? mapData?.mapConfig?.edges : undefined}
+                  edges={mapData.mapConfig.edges}
                   startNodeId={startNodeId}
                   onNodeInteract={handleNodeInteract}
                   onNodeProximity={handleNodeProximity}
@@ -230,38 +298,36 @@ export function GameMap() {
         {/* Top bar */}
         <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start">
           {/* Back button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/')}
-            className="bg-white/90 backdrop-blur-sm"
+          <button
+            onClick={() => navigate('/home')}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-brand-dark/85 border border-white/10 text-white/90 hover:text-white hover:bg-brand-dark/95 backdrop-blur-md text-sm font-medium transition-colors"
           >
             ← Back
-          </Button>
+          </button>
 
-          {/* Spacer to keep top bar layout balanced */}
           <div />
         </div>
 
         {/* Map title indicator */}
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2">
-          <div className="bg-[#4f46e5] text-white px-6 py-2 rounded-full font-bold shadow-lg">
-            {mapTitle}
-            <span className="ml-3 text-sm opacity-80">{progress}%</span>
+          <div className="bg-brand-dark-card/90 border border-brand-accent/30 text-white px-5 py-2 rounded-full font-semibold backdrop-blur-md shadow-lg flex items-center gap-3">
+            <span className="text-sm tracking-tight">{mapTitle}</span>
+            <span className="w-px h-4 bg-white/15" />
+            <span className="text-sm text-brand-accent font-bold">{progress}%</span>
           </div>
         </div>
 
         {/* Bottom controls hint */}
         <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
-          <div className="bg-black/50 text-white px-4 py-2 rounded-lg text-sm backdrop-blur-sm">
-            <span className="opacity-75">Move:</span>{' '}
-            <kbd className="px-2 py-0.5 bg-white/20 rounded">WASD</kbd>
-            <span className="mx-2 opacity-50">|</span>
-            <span className="opacity-75">Run:</span>{' '}
-            <kbd className="px-2 py-0.5 bg-white/20 rounded">Shift</kbd>
-            <span className="mx-2 opacity-50">|</span>
-            <span className="opacity-75">Interact:</span>{' '}
-            <kbd className="px-2 py-0.5 bg-white/20 rounded">E</kbd>
+          <div className="bg-brand-dark/85 border border-white/10 text-white/90 px-4 py-2 rounded-full text-xs backdrop-blur-md flex items-center gap-2">
+            <span className="text-[#9ca3af]">Move</span>{' '}
+            <kbd className="px-2 py-0.5 bg-white/10 rounded text-[10px] font-semibold">WASD</kbd>
+            <span className="text-white/20">·</span>
+            <span className="text-[#9ca3af]">Run</span>{' '}
+            <kbd className="px-2 py-0.5 bg-white/10 rounded text-[10px] font-semibold">Shift</kbd>
+            <span className="text-white/20">·</span>
+            <span className="text-[#9ca3af]">Interact</span>{' '}
+            <kbd className="px-2 py-0.5 bg-white/10 rounded text-[10px] font-semibold">E</kbd>
           </div>
         </div>
 
@@ -270,7 +336,7 @@ export function GameMap() {
       {/* Mini-map overlay (bottom-left) */}
       <MiniMap
         nodes={nodes}
-        edges={isDataDriven ? mapData?.mapConfig?.edges : undefined}
+        edges={mapData.mapConfig.edges}
         completedNodeIds={completedNodes}
         nearbyNodeId={nearbyNodeId}
         avatarPosition={avatarPos}
@@ -284,7 +350,7 @@ export function GameMap() {
         isOpen={mapModalOpen}
         onClose={() => setMapModalOpen(false)}
         nodes={nodes}
-        edges={isDataDriven ? mapData?.mapConfig?.edges : undefined}
+        edges={mapData.mapConfig.edges}
         completedNodeIds={completedNodes}
         nearbyNodeId={nearbyNodeId}
         avatarPosition={avatarPos}
@@ -314,25 +380,14 @@ export function GameMap() {
         size="lg"
       >
         {currentNode && (
-          isDataDriven ? (
-            <DataDrivenContentViewer
-              node={currentNode}
-              onComplete={() => {
-                useGameStore.getState().completeNode(currentNode.id);
-                useGameStore.getState().addXp(currentNode.xpReward);
-                closeContent();
-              }}
-            />
-          ) : (
-            <LegacyContentViewer
-              node={currentNode}
-              onComplete={() => {
-                useGameStore.getState().completeNode(currentNode.id);
-                useGameStore.getState().addXp(currentNode.xpReward);
-                closeContent();
-              }}
-            />
-          )
+          <DataDrivenContentViewer
+            node={currentNode}
+            onComplete={() => {
+              useGameStore.getState().completeNode(mapId, currentNode.id);
+              useGameStore.getState().addXp(currentNode.xpReward);
+              closeContent();
+            }}
+          />
         )}
       </Modal>
 
@@ -452,7 +507,12 @@ function MapScene({ nodes, edges, startNodeId, onNodeInteract, onNodeProximity, 
 // ── Boundaries ──────────────────────────────────────────
 
 function Boundaries() {
-  const radius = 22;
+  // Walkable area radius. Scaled up to match the larger world produced
+  // by the bumped canvas → world scale (buildMap.ts) and the wider
+  // outdoor padding (zonePlanner.computeWorldBounds). If you make the
+  // map even bigger later, bump this so the player can still walk to
+  // the visual edge.
+  const radius = 60;
 
   return (
     <group>
@@ -468,6 +528,14 @@ function Boundaries() {
 
 // ── Data-Driven Content Viewer (Supabase) ───────────────
 
+// ── Tabbed Checkpoint Viewer ─────────────────────────────
+// Fetches all content items for a checkpoint and renders them as tabs.
+// All items must be viewed/completed before the checkpoint can be marked done.
+
+const TYPE_LABELS: Record<string, string> = {
+  video: 'VID', pdf: 'PDF', text: 'TXT', file: 'FILE', quiz: 'QUIZ',
+};
+
 function DataDrivenContentViewer({
   node,
   onComplete,
@@ -475,7 +543,15 @@ function DataDrivenContentViewer({
   node: ContentNode;
   onComplete: () => void;
 }) {
-  const { data: contentItem, isLoading } = usePublicContentItem(node.id);
+  const { data: items = [], isLoading } = usePublicCheckpointItems(node.id);
+  const [activeTab, setActiveTab] = useState(0);
+  const [completedItems, setCompletedItems] = useState<Set<string>>(new Set());
+
+  // Reset state when node changes
+  useEffect(() => {
+    setActiveTab(0);
+    setCompletedItems(new Set());
+  }, [node.id]);
 
   if (isLoading) {
     return (
@@ -485,10 +561,10 @@ function DataDrivenContentViewer({
     );
   }
 
-  if (!contentItem) {
+  if (items.length === 0) {
     return (
       <div className="space-y-4 text-center py-8">
-        <p className="text-gray-500">Content not available yet.</p>
+        <p className="text-gray-500">No content added to this checkpoint yet.</p>
         <Button onClick={onComplete} variant="secondary">
           Mark Complete →
         </Button>
@@ -496,121 +572,184 @@ function DataDrivenContentViewer({
     );
   }
 
-  // Video
-  if (node.type === 'video') {
+  const allCompleted = items.every((item) => completedItems.has(item.id));
+  const activeItem = items[activeTab];
+
+  const markItemComplete = (itemId: string) => {
+    setCompletedItems((prev) => {
+      const next = new Set(prev);
+      next.add(itemId);
+      return next;
+    });
+  };
+
+  // Single-item checkpoints skip tabs
+  if (items.length === 1) {
     return (
       <div className="space-y-4">
-        <p className="text-gray-600 mb-4">{node.description}</p>
-        <VideoPlayer
-          title={node.title}
-          videoUrl={contentItem.fileUrl}
-          onComplete={onComplete}
+        <ContentItemRenderer
+          item={items[0]}
+          onItemComplete={() => {
+            markItemComplete(items[0].id);
+            onComplete();
+          }}
         />
-        <div className="text-sm text-gray-500 text-center">
-          Reward: <span className="font-semibold text-amber-600">+{node.xpReward} XP</span>
-        </div>
       </div>
     );
   }
 
-  // Reading (pdf or text)
-  if (node.type === 'reading') {
-    // If the content item has a file URL (PDF), embed it
-    if (contentItem.fileUrl) {
-      return (
-        <div className="space-y-4">
-          <iframe
-            src={contentItem.fileUrl}
-            className="w-full rounded-lg border border-gray-200"
-            style={{ height: '70vh' }}
-            title={node.title}
-          />
-          <div className="flex justify-between items-center pt-2 border-t">
-            <div className="text-sm text-gray-500">
-              Reward: <span className="font-semibold text-amber-600">+{node.xpReward} XP</span>
-            </div>
-            <Button onClick={onComplete} variant="primary">
-              Mark Complete →
-            </Button>
-          </div>
-        </div>
-      );
-    }
-    // Otherwise render as text/markdown
+  return (
+    <div className="space-y-4">
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-white/10 overflow-x-auto">
+        {items.map((item, i) => {
+          const isActive = i === activeTab;
+          const isDone = completedItems.has(item.id);
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(i)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                isActive
+                  ? 'border-brand-accent text-brand-accent'
+                  : 'border-transparent text-[#9ca3af] hover:text-white hover:border-white/15'
+              }`}
+            >
+              <span
+                className={`text-[10px] font-bold tracking-wider ${
+                  isDone ? 'text-brand-accent' : 'text-[#9ca3af]'
+                }`}
+              >
+                {isDone ? 'DONE' : TYPE_LABELS[item.type] || 'ITEM'}
+              </span>
+              {item.title}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Active tab content */}
+      {activeItem && (
+        <ContentItemRenderer
+          item={activeItem}
+          onItemComplete={() => markItemComplete(activeItem.id)}
+        />
+      )}
+
+      {/* Progress + Complete button */}
+      <div className="flex items-center justify-between pt-3 border-t border-white/10">
+        <span className="text-sm text-[#9ca3af]">
+          {completedItems.size}/{items.length} items completed
+        </span>
+        <BrandButton
+          onClick={onComplete}
+          variant="primary"
+          disabled={!allCompleted}
+        >
+          {allCompleted ? 'Complete checkpoint →' : `${items.length - completedItems.size} remaining`}
+        </BrandButton>
+      </div>
+    </div>
+  );
+}
+
+// ── Per-item renderer (reuses existing content components) ──
+
+function ContentItemRenderer({
+  item,
+  onItemComplete,
+}: {
+  item: ContentItem;
+  onItemComplete: () => void;
+}) {
+  // Video
+  if (item.type === 'video') {
     return (
-      <ReadingPanel
-        title={node.title}
-        content={contentItem.textContent || `# ${node.title}\n\n${node.description}\n\nContent coming soon...`}
-        estimatedReadTime={5}
-        onComplete={onComplete}
+      <VideoPlayer
+        title={item.title}
+        videoUrl={item.fileUrl}
+        onComplete={onItemComplete}
       />
     );
   }
 
-  // Exercise (file)
-  if (node.type === 'exercise') {
+  // PDF
+  if (item.type === 'pdf' && item.fileUrl) {
+    return (
+      <PdfViewer
+        fileUrl={item.fileUrl}
+        title={item.title}
+        onComplete={onItemComplete}
+      />
+    );
+  }
+
+  // Text
+  if (item.type === 'text') {
+    return (
+      <ReadingPanel
+        title={item.title}
+        content={item.textContent || `# ${item.title}\n\nContent coming soon...`}
+        estimatedReadTime={5}
+        onComplete={onItemComplete}
+      />
+    );
+  }
+
+  // File (download)
+  if (item.type === 'file') {
     return (
       <div className="space-y-4">
-        <p className="text-gray-600">{node.description}</p>
-        {contentItem.fileUrl && (
+        <p className="text-[#9ca3af]">{item.description}</p>
+        {item.fileUrl && (
           <a
-            href={contentItem.fileUrl}
+            href={item.fileUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-brand-accent/10 border border-brand-accent/30 text-brand-accent rounded-full text-sm font-medium hover:bg-brand-accent/15 transition-colors"
           >
-            📎 Download Exercise File
+            Download file →
           </a>
         )}
-        <div className="flex justify-between items-center pt-4 border-t">
-          <div className="text-sm text-gray-500">
-            Reward: <span className="font-semibold text-amber-600">+{node.xpReward} XP</span>
-          </div>
-          <Button onClick={onComplete} variant="primary">
-            Mark Complete →
-          </Button>
+        <div className="flex justify-end">
+          <BrandButton onClick={onItemComplete} variant="primary">
+            Done →
+          </BrandButton>
         </div>
       </div>
     );
   }
 
-  // Quiz boss
-  if (node.type === 'quiz-boss') {
-    if (!contentItem.quizData || !contentItem.quizData.questions?.length) {
-      return (
-        <div className="text-center py-8">
-          <div className="text-6xl mb-4">🔮</div>
-          <h3 className="text-xl font-bold text-gray-700 mb-2">Quiz Coming Soon</h3>
-          <p className="text-gray-500 mb-6">Questions are being prepared for this battle.</p>
-          <Button onClick={onComplete} variant="secondary">
-            Continue →
-          </Button>
-        </div>
-      );
-    }
-
-    const questions: BattleQuestion[] = contentItem.quizData.questions.map((q) => ({
-      id: q.id,
-      question: q.question,
-      options: q.options,
-      correctAnswer: q.correctIndex,
-      explanation: '',
+  // Quiz
+  if (item.type === 'quiz' && item.quizData?.questions?.length) {
+    // Normalize in case the row pre-dates the typed-question schema.
+    const quiz = normalizeQuizData(item.quizData);
+    const questions: BattleQuestion[] = quiz.questions.map((q) => ({
+      question: q,
+      explanation: q.explanation ?? '',
       difficulty: 'medium' as const,
       topic: 'general',
     }));
 
+    // QuizBattle expects passingScore as a percentage (0–100). Earlier
+    // versions of the generate-quiz Edge Function emitted it as a 0–1
+    // fraction, so legacy rows still in the DB look like `0.7`. Normalize
+    // on read so the display and the win comparison are correct without a
+    // backfill.
+    const rawPassingScore = quiz.passingScore;
+    const passingScore =
+      rawPassingScore > 0 && rawPassingScore <= 1
+        ? rawPassingScore * 100
+        : rawPassingScore;
+
     return (
       <QuizBattle
-        bossName={contentItem.quizData.bossName || 'Quiz Boss'}
-        bossEmoji={contentItem.quizData.bossEmoji || '👾'}
+        bossName={quiz.bossName || 'Quiz Boss'}
         questions={questions}
-        passingScore={contentItem.quizData.passingScore}
+        passingScore={passingScore}
         onComplete={(result) => {
-          if (result.victory) {
-            onComplete();
-          } else {
-            useGameStore.getState().closeContent();
-          }
+          if (result.victory) onItemComplete();
+          else useGameStore.getState().closeContent();
         }}
       />
     );
@@ -619,114 +758,10 @@ function DataDrivenContentViewer({
   // Fallback
   return (
     <div className="space-y-4">
-      <p className="text-gray-600">{node.description}</p>
-      <div className="flex justify-between items-center pt-4 border-t">
-        <div className="text-sm text-gray-500">
-          Reward: <span className="font-semibold text-amber-600">+{node.xpReward} XP</span>
-        </div>
-        <Button onClick={onComplete} variant="primary">
-          Mark Complete →
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-// ── Legacy Content Viewer (hardcoded Module 1) ──────────
-
-function LegacyContentViewer({
-  node,
-  onComplete,
-}: {
-  node: ContentNode;
-  onComplete: () => void;
-}) {
-  const nodeContent = getNodeContent(node.id);
-
-  if (node.type === 'video') {
-    return (
-      <div className="space-y-4">
-        <p className="text-gray-600 mb-4">{node.description}</p>
-        <VideoPlayer title={node.title} onComplete={onComplete} />
-        <div className="text-sm text-gray-500 text-center">
-          Reward: <span className="font-semibold text-amber-600">+{node.xpReward} XP</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (node.type === 'reading') {
-    return (
-      <ReadingPanel
-        title={node.title}
-        content={nodeContent?.readingContent || `# ${node.title}\n\n${node.description}\n\nContent coming soon...`}
-        estimatedReadTime={nodeContent?.estimatedReadTime || 3}
-        onComplete={onComplete}
-      />
-    );
-  }
-
-  if (node.type === 'exercise' && nodeContent?.exerciseQuestions) {
-    return (
-      <ExerciseModal
-        title={node.title}
-        instructions={nodeContent.exerciseInstructions || 'Complete the following questions to test your understanding.'}
-        questions={nodeContent.exerciseQuestions}
-        onComplete={(score) => {
-          console.log(`Exercise completed with score: ${score}%`);
-          onComplete();
-        }}
-      />
-    );
-  }
-
-  if (node.type === 'quiz-boss') {
-    const questions = getQuizQuestions(node.id);
-    const bossConfig = getBossConfig(node.id);
-
-    if (questions.length === 0) {
-      return (
-        <div className="text-center py-8">
-          <div className="text-6xl mb-4">🔮</div>
-          <h3 className="text-xl font-bold text-gray-700 mb-2">Quiz Coming Soon</h3>
-          <p className="text-gray-500 mb-6">Questions are being prepared for this battle.</p>
-          <Button onClick={onComplete} variant="secondary">
-            Continue →
-          </Button>
-        </div>
-      );
-    }
-
-    return (
-      <QuizBattle
-        bossName={bossConfig.name}
-        bossEmoji={bossConfig.emoji}
-        questions={questions}
-        passingScore={bossConfig.passingScore}
-        onComplete={(result) => {
-          if (result.victory) {
-            onComplete();
-          } else {
-            useGameStore.getState().closeContent();
-          }
-        }}
-      />
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <p className="text-gray-600">{node.description}</p>
-      <div className="bg-gray-100 p-6 rounded-lg text-center">
-        <div className="text-4xl mb-2">📝</div>
-        <p className="text-gray-500">Content placeholder</p>
-      </div>
-      <div className="flex justify-between items-center pt-4 border-t">
-        <div className="text-sm text-gray-500">
-          Reward: <span className="font-semibold text-amber-600">+{node.xpReward} XP</span>
-        </div>
-        <Button onClick={onComplete} variant="primary">
-          Mark Complete →
+      <p className="text-gray-600">{item.description || 'No content available.'}</p>
+      <div className="flex justify-end">
+        <Button onClick={onItemComplete} variant="primary">
+          Done →
         </Button>
       </div>
     </div>

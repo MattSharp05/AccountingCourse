@@ -194,7 +194,7 @@ export function useStudentAllProgress() {
       return ((data || []) as any[]).map((row: Record<string, unknown>) => ({
         id: row.id as string,
         studentId: row.student_id as string,
-        contentItemId: row.content_item_id as string,
+        checkpointId: (row.content_item_id || row.checkpoint_id) as string,
         mapId: row.map_id as string,
         status: row.status as ProgressStatus,
         score: (row.score as number) ?? undefined,
@@ -224,7 +224,7 @@ export function useStudentMapProgress(mapId: string) {
       return ((data || []) as any[]).map((row: Record<string, unknown>) => ({
         id: row.id as string,
         studentId: row.student_id as string,
-        contentItemId: row.content_item_id as string,
+        checkpointId: (row.content_item_id || row.checkpoint_id) as string,
         mapId: row.map_id as string,
         status: row.status as ProgressStatus,
         score: (row.score as number) ?? undefined,
@@ -319,12 +319,12 @@ export function useUpsertProgress() {
 
   return useMutation({
     mutationFn: async ({
-      contentItemId,
+      checkpointId,
       mapId,
       status,
       score,
     }: {
-      contentItemId: string;
+      checkpointId: string;
       mapId: string;
       status: ProgressStatus;
       score?: number;
@@ -334,7 +334,7 @@ export function useUpsertProgress() {
         .upsert(
           {
             student_id: userId!,
-            content_item_id: contentItemId,
+            content_item_id: checkpointId,
             map_id: mapId,
             status,
             score: score ?? null,

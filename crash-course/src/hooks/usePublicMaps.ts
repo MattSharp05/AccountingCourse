@@ -7,7 +7,7 @@ import type { MapData, MapStatus, CanvasData, MapConfig, ContentItem, ContentIte
 export const publicMapKeys = {
   published: ['publicMaps', 'published'] as const,
   detail: (mapId: string) => ['publicMaps', mapId] as const,
-  contentItem: (id: string) => ['publicContentItem', id] as const,
+  checkpointItems: (checkpointId: string) => ['publicCheckpointItems', checkpointId] as const,
 };
 
 // ── Types ───────────────────────────────────────────────
@@ -23,10 +23,6 @@ export interface PublishedMapSummary {
 
 // ── Hooks ───────────────────────────────────────────────
 
-/**
- * Fetches all published maps that have a built map_config.
- * Used on the Home page to list playable maps.
- */
 export function usePublishedMaps() {
   return useQuery({
     queryKey: publicMapKeys.published,
@@ -58,10 +54,6 @@ export function usePublishedMaps() {
   });
 }
 
-/**
- * Fetches a single published map by ID, including its map_config.
- * Used by GameMap to load the 3D scene.
- */
 export function usePublicMap(mapId: string) {
   return useQuery({
     queryKey: publicMapKeys.detail(mapId),
@@ -91,25 +83,24 @@ export function usePublicMap(mapId: string) {
 }
 
 /**
- * Fetches a single content item by ID on demand.
- * Used by ContentViewer when a student interacts with a node.
+ * Fetches all content items for a checkpoint.
+ * Used by the tabbed checkpoint viewer in GameMap.
  */
-export function usePublicContentItem(contentItemId: string | null) {
+export function usePublicCheckpointItems(checkpointId: string | null) {
   return useQuery({
-    queryKey: publicMapKeys.contentItem(contentItemId || ''),
-    queryFn: async (): Promise<ContentItem> => {
+    queryKey: publicMapKeys.checkpointItems(checkpointId || ''),
+    queryFn: async (): Promise<ContentItem[]> => {
       const { data, error } = await supabase
         .from('content_items')
         .select('*')
-        .eq('id', contentItemId!)
-        .single();
+        .eq('checkpoint_id', checkpointId!)
+        .order('order', { ascending: true });
 
       if (error) throw error;
 
-      const row = data as any;
-      return {
+      return ((data || []) as any[]).map((row: Record<string, unknown>): ContentItem => ({
         id: row.id as string,
-        chapterId: row.chapter_id as string,
+        checkpointId: row.checkpoint_id as string,
         type: row.type as ContentItemType,
         title: row.title as string,
         description: (row.description as string) || '',
@@ -119,8 +110,8 @@ export function usePublicContentItem(contentItemId: string | null) {
         metadata: (row.metadata as Record<string, unknown>) ?? undefined,
         order: row.order as number,
         createdAt: row.created_at as string,
-      };
+      }));
     },
-    enabled: !!contentItemId,
+    enabled: !!checkpointId,
   });
 }

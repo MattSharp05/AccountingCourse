@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
-import { Button, ProgressBar } from '../ui';
+import { BookOpen, Check, FileText } from 'lucide-react';
+import { BrandButton, ProgressBar } from '../ui';
 
 interface ReadingPanelProps {
   content: string;
@@ -61,8 +62,10 @@ export function ReadingPanel({
     <div className="flex flex-col h-full max-h-[70vh]">
       {/* Header with progress */}
       <div className="flex-shrink-0 mb-4">
-        <div className="flex items-center justify-between text-sm text-gray-500 mb-2">
-          <span>📖 {estimatedReadTime} min read</span>
+        <div className="flex items-center justify-between text-sm text-[#9ca3af] mb-2">
+          <span className="inline-flex items-center gap-1.5">
+            <BookOpen className="w-4 h-4" /> {estimatedReadTime} min read
+          </span>
           <span>Reading time: {formatTime(readingTime)}</span>
         </div>
         <ProgressBar value={scrollProgress} variant="default" size="sm" />
@@ -74,38 +77,38 @@ export function ReadingPanel({
         className="flex-1 overflow-y-auto pr-4 space-y-4"
         style={{ scrollBehavior: 'smooth' }}
       >
-        <article className="prose prose-lg max-w-none">
+        <article className="prose prose-lg prose-invert max-w-none">
           {/* Custom styled markdown */}
           <div className="reading-content">
             <ReactMarkdown
               components={{
                 h1: ({ children }) => (
-                  <h1 className="text-2xl font-bold text-gray-900 mb-4 font-display">
+                  <h1 className="text-2xl font-bold text-white mb-4 font-display">
                     {children}
                   </h1>
                 ),
                 h2: ({ children }) => (
-                  <h2 className="text-xl font-bold text-gray-800 mt-6 mb-3 font-display">
+                  <h2 className="text-xl font-bold text-white mt-6 mb-3 font-display">
                     {children}
                   </h2>
                 ),
                 h3: ({ children }) => (
-                  <h3 className="text-lg font-semibold text-gray-700 mt-4 mb-2">
+                  <h3 className="text-lg font-semibold text-white/90 mt-4 mb-2">
                     {children}
                   </h3>
                 ),
                 p: ({ children }) => (
-                  <p className="text-gray-600 leading-relaxed mb-4">
+                  <p className="text-white/90 leading-relaxed mb-4">
                     {children}
                   </p>
                 ),
                 ul: ({ children }) => (
-                  <ul className="list-disc list-inside space-y-2 mb-4 text-gray-600">
+                  <ul className="list-disc list-inside space-y-2 mb-4 text-white/90">
                     {children}
                   </ul>
                 ),
                 ol: ({ children }) => (
-                  <ol className="list-decimal list-inside space-y-2 mb-4 text-gray-600">
+                  <ol className="list-decimal list-inside space-y-2 mb-4 text-white/90">
                     {children}
                   </ol>
                 ),
@@ -113,20 +116,20 @@ export function ReadingPanel({
                   <li className="ml-2">{children}</li>
                 ),
                 blockquote: ({ children }) => (
-                  <blockquote className="border-l-4 border-primary-400 pl-4 py-2 my-4 bg-primary-50 rounded-r-lg italic text-gray-700">
+                  <blockquote className="border-l-4 border-brand-accent pl-4 py-2 my-4 bg-brand-accent/10 rounded-r-lg italic text-white/90">
                     {children}
                   </blockquote>
                 ),
                 code: ({ children }) => (
-                  <code className="bg-gray-100 px-2 py-0.5 rounded text-sm font-mono text-primary-700">
+                  <code className="bg-white/5 px-2 py-0.5 rounded text-sm font-mono text-brand-accent">
                     {children}
                   </code>
                 ),
                 strong: ({ children }) => (
-                  <strong className="font-bold text-gray-900">{children}</strong>
+                  <strong className="font-bold text-white">{children}</strong>
                 ),
                 em: ({ children }) => (
-                  <em className="italic text-gray-700">{children}</em>
+                  <em className="italic text-white/90">{children}</em>
                 ),
               }}
             >
@@ -141,30 +144,34 @@ export function ReadingPanel({
           animate={{ opacity: hasRead ? 1 : 0.3, y: 0 }}
           className="text-center py-8"
         >
-          <div className="text-4xl mb-2">
-            {hasRead ? '✅' : '📄'}
+          <div className="mb-2 flex justify-center">
+            {hasRead ? (
+              <Check className="w-10 h-10 text-brand-accent" />
+            ) : (
+              <FileText className="w-10 h-10 text-[#6b7280]" />
+            )}
           </div>
-          <p className="text-gray-500">
+          <p className="text-[#9ca3af]">
             {hasRead ? 'Reading complete!' : 'Keep scrolling...'}
           </p>
         </motion.div>
       </div>
 
       {/* Footer with complete button */}
-      <div className="flex-shrink-0 pt-4 border-t mt-4">
+      <div className="flex-shrink-0 pt-4 border-t border-white/10 mt-4">
         <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-500">
+          <div className="text-sm text-[#9ca3af]">
             {hasRead ? (
-              <span className="text-accent-600 font-medium">
-                ✓ Content read
+              <span className="inline-flex items-center gap-1.5 text-brand-accent font-medium">
+                <Check className="w-4 h-4" /> Content read
               </span>
             ) : (
               <span>Scroll to continue reading</span>
             )}
           </div>
-          <Button onClick={onComplete} variant="primary">
-            {hasRead ? 'Complete & Continue →' : 'Mark as Read'}
-          </Button>
+          <BrandButton onClick={onComplete} variant="primary">
+            {hasRead ? 'Complete & Continue' : 'Mark as Read'}
+          </BrandButton>
         </div>
       </div>
     </div>

@@ -1,3 +1,4 @@
+export { Landing } from './Landing';
 export { Home } from './Home';
 export { GameMap } from './GameMap';
 export { StudentLogin } from './StudentLogin';

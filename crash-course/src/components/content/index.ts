@@ -4,3 +4,4 @@
 export { VideoPlayer } from './VideoPlayer';
 export { ReadingPanel } from './ReadingPanel';
 export { ExerciseModal } from './ExerciseModal';
+export { PdfViewer } from './PdfViewer';

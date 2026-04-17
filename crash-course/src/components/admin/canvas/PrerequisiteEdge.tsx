@@ -18,7 +18,6 @@ export function PrerequisiteEdge({
   sourcePosition,
   targetPosition,
   style,
-  markerEnd,
 }: EdgeProps) {
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
@@ -29,11 +28,17 @@ export function PrerequisiteEdge({
     targetPosition,
   });
 
+  // Arrow character pointing from source toward target
+  const dy = targetY - sourceY;
+  const dx = targetX - sourceX;
+  const arrow = Math.abs(dy) > Math.abs(dx)
+    ? (dy > 0 ? '↓' : '↑')
+    : (dx > 0 ? '→' : '←');
+
   return (
     <>
       <BaseEdge
         path={edgePath}
-        markerEnd={markerEnd}
         style={{
           ...style,
           stroke: PREREQ_COLOR,
@@ -57,7 +62,7 @@ export function PrerequisiteEdge({
               select-none whitespace-nowrap
             "
           >
-            Pre-req
+            Pre-req {arrow}
           </div>
 
           {/* Delete button (shows on hover) */}

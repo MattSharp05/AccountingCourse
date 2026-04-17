@@ -17,7 +17,7 @@ Guidelines:
 - Use analogies to explain complex concepts (e.g., "Think of assets like your piggy bank")
 - Break down jargon into plain English
 - If a student is confused, try a different explanation approach
-- Sprinkle in relevant emojis to keep it engaging 📊💰
+- Do not use emojis in your responses
 - Stay focused on financial statements topics
 - If asked about unrelated topics, gently redirect to course material
 
@@ -37,10 +37,10 @@ try {
 
 // Fallback responses when API is unavailable
 const FALLBACK_RESPONSES = [
-  "I'm having trouble connecting right now, but let me share a tip: The balance sheet shows what a company owns (assets), owes (liabilities), and the owner's stake (equity). Assets = Liabilities + Equity! 📊",
-  "Connection issue! Here's a quick lesson: Revenue is the 'top line' of an income statement - it's money earned from selling products or services. Net income is the 'bottom line' - what's left after all expenses! 💰",
-  "I can't connect to my brain right now! But remember: Cash flow is king! A company can show profit but still run out of cash if customers don't pay on time. The cash flow statement tracks actual money movement. 🏦",
-  "Having technical difficulties! Fun fact: The three financial statements are interconnected. Net income from the income statement flows to retained earnings on the balance sheet, and adjustments for non-cash items connect to the cash flow statement! 🔗",
+  "I'm having trouble connecting right now, but let me share a tip: The balance sheet shows what a company owns (assets), owes (liabilities), and the owner's stake (equity). Assets = Liabilities + Equity!",
+  "Connection issue! Here's a quick lesson: Revenue is the 'top line' of an income statement - it's money earned from selling products or services. Net income is the 'bottom line' - what's left after all expenses!",
+  "I can't connect to my brain right now! But remember: Cash flow is king! A company can show profit but still run out of cash if customers don't pay on time. The cash flow statement tracks actual money movement.",
+  "Having technical difficulties! Fun fact: The three financial statements are interconnected. Net income from the income statement flows to retained earnings on the balance sheet, and adjustments for non-cash items connect to the cash flow statement!",
 ];
 
 interface ChatMessage {

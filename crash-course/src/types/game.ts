@@ -21,7 +21,13 @@ export interface ContentNode {
 
 export interface PlayerProgress {
   currentModule: number;
-  completedNodes: string[];
+  /**
+   * Per-map record of completed checkpoint IDs. Keyed by map ID so that
+   * progress in one map cannot leak into another (each map has its own
+   * UUID namespace, and a global flat array would let stale IDs from
+   * previous maps pollute future unlock checks).
+   */
+  completedNodes: Record<string, string[]>;
   xp: number;
   level: number;
   badges: string[];
@@ -32,7 +38,7 @@ export interface PlayerProgress {
 export interface AvatarState {
   position: Vector3;
   rotation: number;
-  animation: 'idle' | 'walk' | 'run';
+  animation: 'idle' | 'walk' | 'run' | 'dance';
 }
 
 export interface GameState {
@@ -51,7 +57,7 @@ export interface GameState {
   setCurrentNode: (nodeId: string | null) => void;
   openContent: () => void;
   closeContent: () => void;
-  completeNode: (nodeId: string) => void;
+  completeNode: (mapId: string, nodeId: string) => void;
   addXp: (amount: number) => void;
   updateAvatarPosition: (position: Vector3) => void;
   updateAvatarAnimation: (animation: AvatarState['animation']) => void;

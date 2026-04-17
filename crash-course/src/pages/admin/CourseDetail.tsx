@@ -1,15 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ChevronRight, Pencil, Trash2, Map as MapIcon, Plus } from 'lucide-react';
 import { useCourse, useUpdateCourse, useModulesForCourse, useAddModule, useUpdateModule, useDeleteModule } from '../../hooks';
-import { Button } from '../../components/ui/Button';
-import { Modal } from '../../components/ui/Modal';
+import { BrandButton, Modal, FadeIn } from '../../components/ui';
 import type { PublishStatus } from '../../types/admin';
 
 const statusColors: Record<PublishStatus, string> = {
-  draft: 'bg-gray-200 text-gray-700',
-  published: 'bg-green-100 text-green-700',
-  archived: 'bg-yellow-100 text-yellow-700',
+  draft: 'bg-white/5 text-[#9ca3af] border border-white/10',
+  published: 'bg-brand-accent/10 text-brand-accent border border-brand-accent/20',
+  archived: 'bg-white/5 text-[#6b7280] border border-white/10',
 };
 
 function StatusPill({ status }: { status: PublishStatus }) {
@@ -62,7 +62,7 @@ function InlineEdit({
           if (e.key === 'Enter') commit();
           if (e.key === 'Escape') { setDraft(value); setEditing(false); }
         }}
-        className={`bg-white border-2 border-primary-400 rounded-lg px-3 py-1 outline-none focus:ring-2 focus:ring-primary-300 ${inputClassName}`}
+        className={`bg-white/5 border border-brand-accent/50 rounded-lg px-3 py-1 text-white outline-none focus:ring-2 focus:ring-brand-accent/50 ${inputClassName}`}
       />
     );
   }
@@ -70,26 +70,8 @@ function InlineEdit({
   return (
     <span className={`cursor-pointer group inline-flex items-center gap-2 ${className}`} onClick={() => setEditing(true)} title="Click to edit">
       <span>{value}</span>
-      <svg className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-      </svg>
+      <Pencil className="w-3.5 h-3.5 text-[#6b7280] opacity-0 group-hover:opacity-100 transition-opacity" />
     </span>
-  );
-}
-
-function TrashIcon({ className = '' }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-    </svg>
-  );
-}
-
-function MapIcon({ className = '' }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-    </svg>
   );
 }
 
@@ -123,12 +105,13 @@ export function CourseDetail() {
 
   if (!courseId || !course) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50 flex items-center justify-center">
-        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center">
-          <h2 className="text-xl font-bold font-display text-gray-700 mb-2">Course not found</h2>
-          <p className="text-gray-500 mb-6">The course you are looking for does not exist or has been removed.</p>
-          <Button variant="ghost" onClick={() => navigate('/admin')}>Back to Courses</Button>
-        </motion.div>
+      <div className="min-h-screen bg-brand-dark text-white flex items-center justify-center">
+        <FadeIn y={12} className="text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-brand-accent mb-3">Not found</p>
+          <h2 className="text-xl font-bold text-white mb-2">Course not found</h2>
+          <p className="text-[#9ca3af] mb-6">The course you are looking for does not exist or has been removed.</p>
+          <BrandButton variant="outline" onClick={() => navigate('/admin')}>Back to courses</BrandButton>
+        </FadeIn>
       </div>
     );
   }
@@ -148,37 +131,48 @@ export function CourseDetail() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50">
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div className="min-h-screen bg-brand-dark text-white">
+      <div className="container mx-auto px-4 py-10 max-w-5xl">
         {/* Breadcrumb */}
-        <motion.nav initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-1.5 text-sm text-gray-500 mb-6">
-          <Link to="/admin" className="hover:text-primary-600 transition-colors font-medium">Courses</Link>
-          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-          <span className="text-gray-800 font-semibold truncate max-w-xs">{course.title}</span>
+        <motion.nav initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 text-sm mb-8">
+          <Link to="/admin" className="text-[#9ca3af] hover:text-white transition-colors font-medium">Courses</Link>
+          <ChevronRight className="w-4 h-4 text-[#6b7280]" />
+          <span className="text-white font-semibold truncate max-w-xs">{course.title}</span>
         </motion.nav>
 
         {/* Header */}
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-10">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-3xl font-bold font-display text-gray-900">
-                <InlineEdit value={course.title} onSave={(title) => updateCourseMut.mutate({ id: course.id, title })} inputClassName="text-3xl font-bold font-display" />
-              </h1>
-              <StatusPill status={course.status} />
+        <FadeIn y={12}>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6 mb-12">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-brand-accent mb-3">Course</p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">
+                  <InlineEdit value={course.title} onSave={(title) => updateCourseMut.mutate({ id: course.id, title })} inputClassName="text-3xl md:text-4xl font-bold" />
+                </h1>
+                <StatusPill status={course.status} />
+              </div>
+              {course.description && <p className="text-[#9ca3af] mt-3 leading-relaxed max-w-2xl">{course.description}</p>}
             </div>
-            {course.description && <p className="text-gray-500 mt-2 text-sm leading-relaxed max-w-2xl">{course.description}</p>}
+            <BrandButton
+              size="md"
+              variant="primary"
+              onClick={() => setShowAddModal(true)}
+              leftIcon={<Plus className="w-4 h-4" />}
+            >
+              Add module
+            </BrandButton>
           </div>
-          <Button size="md" onClick={() => setShowAddModal(true)} leftIcon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>}>
-            Add Module
-          </Button>
-        </motion.div>
+        </FadeIn>
+
+        {/* Section label */}
+        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-brand-accent mb-4">Modules</p>
 
         {/* Module list */}
         {modulesData.length === 0 ? (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="rounded-game-lg border-2 border-dashed border-gray-200 bg-white/60 py-20 flex flex-col items-center justify-center text-center">
-            <h3 className="text-lg font-bold font-display text-gray-700 mb-1">No modules yet</h3>
-            <p className="text-gray-400 text-sm mb-6 max-w-sm">Modules organize your course content into logical sections. Add your first module to get started.</p>
-            <Button size="sm" onClick={() => setShowAddModal(true)}>Add Module</Button>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="rounded-2xl border border-dashed border-white/10 bg-brand-dark-card/50 py-20 flex flex-col items-center justify-center text-center">
+            <h3 className="text-lg font-bold text-white mb-1">No modules yet</h3>
+            <p className="text-[#9ca3af] text-sm mb-6 max-w-sm">Modules organize your course content into logical sections. Add your first module to get started.</p>
+            <BrandButton size="sm" variant="primary" onClick={() => setShowAddModal(true)} leftIcon={<Plus className="w-3.5 h-3.5" />}>Add module</BrandButton>
           </motion.div>
         ) : (
           <motion.ul variants={listVariants} initial="hidden" animate="visible" className="flex flex-col gap-4">
@@ -188,33 +182,39 @@ export function CourseDetail() {
                 return (
                   <motion.li key={mod.id} variants={itemVariants} layout exit={{ opacity: 0, x: -40, transition: { duration: 0.2 } }}>
                     <div
-                      className="group relative bg-white rounded-game-lg shadow-game border border-gray-100 hover:shadow-game-hover hover:border-primary-200 transition-all duration-200 cursor-pointer"
+                      className="group relative bg-brand-dark-card rounded-2xl border border-white/10 hover:border-brand-accent/30 transition-all duration-200 cursor-pointer shadow-2xl shadow-black/40"
                       onClick={() => navigate(`/admin/course/${courseId}/module/${mod.id}`)}
                     >
-                      <div className="flex items-start gap-4 p-5">
-                        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary-100 text-primary-600 font-bold font-display flex items-center justify-center text-lg">{mod.order}</div>
+                      <div className="flex items-start gap-4 p-6">
+                        <div className="flex-shrink-0 w-11 h-11 rounded-xl bg-brand-accent/10 border border-brand-accent/20 text-brand-accent font-bold flex items-center justify-center text-lg">
+                          {mod.order}
+                        </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <span className="text-base font-semibold font-display text-gray-900 truncate">
-                              <InlineEdit value={mod.title} onSave={(title) => updateModuleMut.mutate({ id: mod.id, courseId: courseId!, title })} className="truncate" inputClassName="text-base font-semibold font-display" />
+                            <span className="text-base font-semibold text-white truncate">
+                              <InlineEdit value={mod.title} onSave={(title) => updateModuleMut.mutate({ id: mod.id, courseId: courseId!, title })} className="truncate" inputClassName="text-base font-semibold" />
                             </span>
                             <StatusPill status={mod.status} />
                           </div>
-                          {mod.description && <p className="text-sm text-gray-500 line-clamp-2 mb-2">{mod.description}</p>}
-                          <div className="flex items-center gap-1 text-xs text-gray-400">
+                          {mod.description && <p className="text-sm text-[#9ca3af] line-clamp-2 mb-2 leading-relaxed">{mod.description}</p>}
+                          <div className="flex items-center gap-1.5 text-xs text-[#6b7280]">
                             <MapIcon className="w-3.5 h-3.5" />
                             <span>{mapCount} {mapCount === 1 ? 'map' : 'maps'}</span>
                           </div>
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="sm" onClick={() => updateModuleMut.mutate({ id: mod.id, courseId: courseId!, status: nextStatus[mod.status] })}>
+                          <BrandButton variant="ghost" size="sm" onClick={() => updateModuleMut.mutate({ id: mod.id, courseId: courseId!, status: nextStatus[mod.status] })}>
                             {mod.status === 'draft' && 'Publish'}
                             {mod.status === 'published' && 'Archive'}
                             {mod.status === 'archived' && 'Draft'}
-                          </Button>
-                          <Button variant="ghost" size="sm" className="text-error-500 hover:bg-error-50" onClick={() => setDeletingId(mod.id)}>
-                            <TrashIcon className="w-4 h-4" />
-                          </Button>
+                          </BrandButton>
+                          <button
+                            onClick={() => setDeletingId(mod.id)}
+                            className="p-2 rounded-full text-[#6b7280] hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                            aria-label="Delete module"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -226,28 +226,33 @@ export function CourseDetail() {
         )}
       </div>
 
-      <Modal isOpen={showAddModal} onClose={() => { setShowAddModal(false); setNewModuleTitle(''); setNewModuleDescription(''); }} title="Add Module" size="sm">
+      <Modal isOpen={showAddModal} onClose={() => { setShowAddModal(false); setNewModuleTitle(''); setNewModuleDescription(''); }} title="Add module" size="sm">
         <form onSubmit={(e) => { e.preventDefault(); handleAddModule(); }} className="flex flex-col gap-5">
           <div>
-            <label htmlFor="module-title" className="block text-sm font-semibold text-gray-700 mb-1.5">Title</label>
-            <input id="module-title" type="text" value={newModuleTitle} onChange={(e) => setNewModuleTitle(e.target.value)} placeholder="e.g. Introduction to Financial Statements" autoFocus className="w-full px-4 py-2.5 rounded-game border border-gray-200 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-primary-400 transition-colors" />
+            <label htmlFor="module-title" className="block text-xs font-semibold uppercase tracking-[0.15em] text-[#9ca3af] mb-2">Title</label>
+            <input id="module-title" type="text" value={newModuleTitle} onChange={(e) => setNewModuleTitle(e.target.value)} placeholder="e.g. Introduction to Financial Statements" autoFocus className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-brand-accent/50 focus:border-brand-accent/50 transition-colors" />
           </div>
           <div>
-            <label htmlFor="module-description" className="block text-sm font-semibold text-gray-700 mb-1.5">Description</label>
-            <textarea id="module-description" value={newModuleDescription} onChange={(e) => setNewModuleDescription(e.target.value)} placeholder="A brief summary of this module..." rows={3} className="w-full px-4 py-2.5 rounded-game border border-gray-200 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-primary-400 transition-colors resize-none" />
+            <label htmlFor="module-description" className="block text-xs font-semibold uppercase tracking-[0.15em] text-[#9ca3af] mb-2">Description</label>
+            <textarea id="module-description" value={newModuleDescription} onChange={(e) => setNewModuleDescription(e.target.value)} placeholder="A brief summary of this module..." rows={3} className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-brand-accent/50 focus:border-brand-accent/50 transition-colors resize-none" />
           </div>
           <div className="flex items-center justify-end gap-3 pt-2">
-            <Button type="button" variant="ghost" size="sm" onClick={() => { setShowAddModal(false); setNewModuleTitle(''); setNewModuleDescription(''); }}>Cancel</Button>
-            <Button type="submit" size="sm" disabled={!newModuleTitle.trim()}>Create Module</Button>
+            <BrandButton type="button" variant="ghost" size="sm" onClick={() => { setShowAddModal(false); setNewModuleTitle(''); setNewModuleDescription(''); }}>Cancel</BrandButton>
+            <BrandButton type="submit" size="sm" variant="primary" disabled={!newModuleTitle.trim()}>Create module</BrandButton>
           </div>
         </form>
       </Modal>
 
-      <Modal isOpen={deletingId !== null} onClose={() => setDeletingId(null)} title="Delete Module" size="sm">
-        <p className="text-gray-600 mb-6">Are you sure you want to delete this module? All maps and content within it will be permanently removed.</p>
+      <Modal isOpen={deletingId !== null} onClose={() => setDeletingId(null)} title="Delete module" size="sm">
+        <p className="text-[#9ca3af] mb-6 leading-relaxed">Are you sure you want to delete this module? All maps and content within it will be permanently removed.</p>
         <div className="flex items-center justify-end gap-3">
-          <Button variant="ghost" size="sm" onClick={() => setDeletingId(null)}>Cancel</Button>
-          <Button variant="danger" size="sm" onClick={() => { if (deletingId) handleDeleteModule(deletingId); }}>Delete</Button>
+          <BrandButton variant="ghost" size="sm" onClick={() => setDeletingId(null)}>Cancel</BrandButton>
+          <button
+            onClick={() => { if (deletingId) handleDeleteModule(deletingId); }}
+            className="px-5 py-2 rounded-full bg-red-500/15 border border-red-500/40 text-red-300 text-sm font-semibold hover:bg-red-500/25 transition-colors"
+          >
+            Delete
+          </button>
         </div>
       </Modal>
     </div>

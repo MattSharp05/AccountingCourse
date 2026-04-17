@@ -7,5 +7,5 @@ export {
   ACHIEVEMENTS,
   type Achievement
 } from './AchievementBadge';
-export { Confetti, CelebrationBurst } from './Confetti';
+export { Confetti } from './Confetti';
 export { LevelUpNotification } from './LevelUpNotification';

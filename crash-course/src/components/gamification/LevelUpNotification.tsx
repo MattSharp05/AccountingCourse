@@ -52,13 +52,14 @@ export function LevelUpNotification({ level, show, onClose }: LevelUpNotificatio
 
             {/* Content */}
             <div className="relative z-10 text-center text-white">
-              <motion.div
-                animate={{ rotate: [0, 10, -10, 0] }}
-                transition={{ duration: 0.5, repeat: 3 }}
-                className="text-7xl mb-4"
+              <motion.p
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="text-xs font-bold uppercase tracking-[0.4em] mb-4 opacity-90"
               >
-                🎖️
-              </motion.div>
+                You reached
+              </motion.p>
 
               <motion.h2
                 initial={{ opacity: 0, y: 20 }}
@@ -104,11 +105,9 @@ export function LevelUpNotification({ level, show, onClose }: LevelUpNotificatio
                     repeat: Infinity,
                     repeatDelay: 1,
                   }}
-                  className="absolute top-1/2 left-1/2 text-2xl"
-                  style={{ marginLeft: -12, marginTop: -12 }}
-                >
-                  ✨
-                </motion.span>
+                  className="absolute top-1/2 left-1/2 w-2 h-2 rounded-full bg-white"
+                  style={{ marginLeft: -4, marginTop: -4 }}
+                />
               ))}
             </div>
           </motion.div>

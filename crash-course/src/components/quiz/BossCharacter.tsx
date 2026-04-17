@@ -7,7 +7,6 @@ interface BossCharacterProps {
   currentHealth: number;
   isAttacking?: boolean;
   isTakingDamage?: boolean;
-  emoji?: string;
 }
 
 export function BossCharacter({
@@ -16,17 +15,16 @@ export function BossCharacter({
   currentHealth,
   isAttacking = false,
   isTakingDamage = false,
-  emoji = '👾',
 }: BossCharacterProps) {
   const healthPercent = (currentHealth / maxHealth) * 100;
   const isLowHealth = healthPercent < 30;
   const isDefeated = currentHealth <= 0;
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center font-sans">
       {/* Boss name */}
       <div className="mb-2">
-        <span className="text-lg font-bold text-gray-800">{name}</span>
+        <span className="text-lg font-bold text-white">{name}</span>
       </div>
 
       {/* Health bar */}
@@ -56,8 +54,8 @@ export function BossCharacter({
           className="absolute inset-0 rounded-full blur-2xl"
           style={{
             background: isLowHealth
-              ? 'radial-gradient(circle, rgba(239,68,68,0.4) 0%, transparent 70%)'
-              : 'radial-gradient(circle, rgba(139,92,246,0.3) 0%, transparent 70%)',
+              ? 'radial-gradient(circle, rgba(239,68,68,0.5) 0%, transparent 70%)'
+              : 'radial-gradient(circle, rgba(212,168,79,0.35) 0%, transparent 70%)',
           }}
           animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0.8, 0.5] }}
           transition={{ duration: 2, repeat: Infinity }}
@@ -66,13 +64,15 @@ export function BossCharacter({
         {/* Main boss body */}
         <div className="relative z-10 flex items-center justify-center">
           <motion.div
-            className="text-8xl select-none"
+            className="w-32 h-32 rounded-full bg-gradient-to-br from-brand-accent to-brand-accent-dark border-4 border-white/20 shadow-[0_0_40px_rgba(212,168,79,0.4)] flex items-center justify-center select-none"
             animate={{
               filter: isTakingDamage ? 'brightness(2)' : 'brightness(1)',
             }}
             transition={{ duration: 0.1 }}
           >
-            {emoji}
+            <span className="text-3xl font-display font-bold text-brand-dark tracking-wider">
+              {name.charAt(0).toUpperCase()}
+            </span>
           </motion.div>
         </div>
 
@@ -84,10 +84,8 @@ export function BossCharacter({
               animate={{ opacity: [0, 1, 0] }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.3 }}
-              className="absolute inset-0 flex items-center justify-center"
-            >
-              <div className="text-4xl font-bold text-red-500">💥</div>
-            </motion.div>
+              className="absolute inset-0 rounded-full bg-white"
+            />
           )}
         </AnimatePresence>
 
@@ -98,9 +96,9 @@ export function BossCharacter({
               initial={{ opacity: 0, y: 0 }}
               animate={{ opacity: 1, y: 20 }}
               exit={{ opacity: 0 }}
-              className="absolute -bottom-8 left-1/2 transform -translate-x-1/2"
+              className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-xs font-bold uppercase tracking-[0.25em] text-red-400"
             >
-              <span className="text-2xl">⚡</span>
+              Attack
             </motion.div>
           )}
         </AnimatePresence>
@@ -112,11 +110,13 @@ export function BossCharacter({
         animate={{ opacity: isDefeated ? 0 : 1 }}
       >
         {isDefeated ? (
-          <span className="text-green-600">Defeated!</span>
+          <span className="text-brand-accent uppercase tracking-[0.25em] text-xs font-bold">
+            Defeated
+          </span>
         ) : isLowHealth ? (
-          <span className="text-red-500">Almost there!</span>
+          <span className="text-red-400">Almost there!</span>
         ) : (
-          <span className="text-gray-500">HP: {currentHealth}/{maxHealth}</span>
+          <span className="text-[#9ca3af]">HP: {currentHealth}/{maxHealth}</span>
         )}
       </motion.div>
     </div>

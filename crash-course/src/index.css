@@ -1,53 +1,77 @@
 @import "tailwindcss";
 
 /* Import fonts */
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600&display=swap');
 
 /* Custom Theme Configuration for Tailwind v4 */
 @theme {
-  /* Refined Professional Color Palette */
-  --color-primary-50: #eef2ff;
-  --color-primary-100: #e0e7ff;
-  --color-primary-200: #c7d2fe;
-  --color-primary-300: #a5b4fc;
-  --color-primary-400: #818cf8;
-  --color-primary-500: #6366f1;
-  --color-primary-600: #4f46e5;
-  --color-primary-700: #4338ca;
-  --color-primary-800: #3730a3;
-  --color-primary-900: #312e81;
+  /* ============================================================ */
+  /* Brand tokens — Deep Forest + Warm Gold design system          */
+  /* Use these on all new / redesigned surfaces going forward.    */
+  /* ============================================================ */
+  --color-brand-primary: #D4A84F;
+  --color-brand-primary-dark: #B8902F;
+  --color-brand-primary-light: #E0B65C;
 
-  --color-secondary-50: #fffbeb;
-  --color-secondary-100: #fef3c7;
-  --color-secondary-200: #fde68a;
-  --color-secondary-300: #fcd34d;
-  --color-secondary-400: #fbbf24;
-  --color-secondary-500: #f59e0b;
-  --color-secondary-600: #d97706;
-  --color-secondary-700: #b45309;
-  --color-secondary-800: #92400e;
-  --color-secondary-900: #78350f;
+  --color-brand-accent: #D4A84F;
+  --color-brand-accent-dark: #B8902F;
+  --color-brand-accent-light: #E0B65C;
 
-  --color-accent-50: #ecfdf5;
-  --color-accent-100: #d1fae5;
-  --color-accent-200: #a7f3d0;
-  --color-accent-300: #6ee7b7;
-  --color-accent-400: #34d399;
-  --color-accent-500: #10b981;
-  --color-accent-600: #059669;
-  --color-accent-700: #047857;
-  --color-accent-800: #065f46;
-  --color-accent-900: #064e3b;
+  --color-brand-dark: #081F1A;
+  --color-brand-dark-lighter: #0B2E26;
+  --color-brand-dark-card: #123D33;
+
+  --color-brand-neutral: #A7B3AF;
+  --color-brand-light: #F5F5F5;
+  --color-brand-light-dark: #6E7F7A;
+
+  /* ============================================================ */
+  /* Legacy tokens — preserved during incremental migration.       */
+  /* Do not use on new work; migrate existing usages to brand-*.  */
+  /* ============================================================ */
+  --color-primary-50: #faf6e8;
+  --color-primary-100: #f4ecca;
+  --color-primary-200: #ead89d;
+  --color-primary-300: #e0c170;
+  --color-primary-400: #dab55e;
+  --color-primary-500: #d4a84f;
+  --color-primary-600: #b8902f;
+  --color-primary-700: #927124;
+  --color-primary-800: #6e551b;
+  --color-primary-900: #4a3812;
+
+  --color-secondary-50: #faf6e8;
+  --color-secondary-100: #f4ecca;
+  --color-secondary-200: #ead89d;
+  --color-secondary-300: #e0c170;
+  --color-secondary-400: #dab55e;
+  --color-secondary-500: #d4a84f;
+  --color-secondary-600: #b8902f;
+  --color-secondary-700: #927124;
+  --color-secondary-800: #6e551b;
+  --color-secondary-900: #4a3812;
+
+  --color-accent-50: #eff7f4;
+  --color-accent-100: #d5e8df;
+  --color-accent-200: #abcfc0;
+  --color-accent-300: #7aae9a;
+  --color-accent-400: #4f8a77;
+  --color-accent-500: #2f6755;
+  --color-accent-600: #234e40;
+  --color-accent-700: #1b3d32;
+  --color-accent-800: #123d33;
+  --color-accent-900: #0b2e26;
 
   --color-error-500: #f43f5e;
   --color-error-600: #e11d48;
 
-  --color-game-bg: #0f172a;
-  --color-game-surface: #1e293b;
-  --color-game-light: #f8fafc;
+  --color-game-bg: #081F1A;
+  --color-game-surface: #123D33;
+  --color-game-light: #F5F5F5;
 
   /* Font families */
-  --font-display: 'Nunito', system-ui, sans-serif;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Playfair Display', Georgia, serif;
   --font-body: 'Inter', system-ui, sans-serif;
 
   /* Border radius */
@@ -72,9 +96,10 @@
 
 /* Base styles */
 html {
-  font-family: var(--font-body);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
 }
 
 body {
@@ -89,7 +114,7 @@ body {
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-display);
+  font-family: var(--font-sans);
   font-weight: 700;
 }
 
@@ -230,4 +255,135 @@ h1, h2, h3, h4, h5, h6 {
 
 .canvas-overlay > * {
   pointer-events: auto;
+}
+
+/* ============================================================ */
+/* ShapeMint-style design primitives                              */
+/* ============================================================ */
+
+/* Gradient text — for hero punchlines */
+.gradient-text {
+  background: linear-gradient(90deg, #E0B65C 0%, #D4A84F 50%, #B8902F 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Glowing CTA button */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(212, 168, 79, 0.3), 0 0 60px rgba(212, 168, 79, 0.1); }
+  50%      { box-shadow: 0 0 30px rgba(212, 168, 79, 0.5), 0 0 80px rgba(212, 168, 79, 0.2); }
+}
+
+.btn-glow {
+  position: relative;
+  box-shadow: 0 0 20px rgba(212, 168, 79, 0.3), 0 0 60px rgba(212, 168, 79, 0.1);
+  animation: glow-pulse 3s ease-in-out infinite;
+  transition: all 0.3s ease;
+}
+
+.btn-glow:hover {
+  box-shadow: 0 0 30px rgba(212, 168, 79, 0.6), 0 0 80px rgba(212, 168, 79, 0.25);
+  transform: translateY(-1px);
+}
+
+/* Card hover glow */
+.card-glow {
+  transition: all 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.card-glow:hover {
+  border-color: rgba(212, 168, 79, 0.35);
+  box-shadow: 0 0 20px rgba(212, 168, 79, 0.12), 0 4px 20px rgba(0, 0, 0, 0.3);
+  transform: translateY(-2px);
+}
+
+/* Spotlight group — hovering one card dims the rest */
+.spotlight-cards > .card-glow {
+  transition: all 0.3s ease, filter 0.3s ease, opacity 0.3s ease;
+}
+
+.spotlight-cards:hover > .card-glow {
+  opacity: 0.45;
+  filter: blur(1.5px) saturate(0.85);
+}
+
+.spotlight-cards:hover > .card-glow:hover {
+  opacity: 1;
+  filter: blur(0) saturate(1);
+  transform: translateY(-4px) scale(1.015);
+  border-color: rgba(212, 168, 79, 0.5);
+  box-shadow: 0 0 25px rgba(212, 168, 79, 0.18), 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+
+@media (hover: none) {
+  .spotlight-cards:hover > .card-glow { opacity: 1; filter: none; }
+}
+
+/* Cinematic radial background */
+.bg-cinematic {
+  background:
+    radial-gradient(circle at top right,
+      rgba(212, 168, 79, 0.15) 0%,
+      rgba(212, 168, 79, 0.05) 30%,
+      transparent 60%),
+    #081F1A;
+}
+
+/* Subtle noise texture */
+.bg-noise::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.05'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+  mix-blend-mode: overlay;
+}
+
+/* Fade / shimmer animations */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+.animate-fade-in    { animation: fade-in    0.4s ease-out; }
+.animate-fade-in-up { animation: fade-in-up 0.6s ease-out; }
+
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Section divider glint */
+.section-divider {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6rem;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212, 168, 79, 0.3), transparent);
+}
+
+/* Accessibility: respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -13,7 +13,7 @@ interface Edge {
 type NodeState = 'locked' | 'available' | 'completed' | 'current';
 
 const NODE_COLORS: Record<ContentType, string> = {
-  video: '#4F46E5',
+  video: '#D4A84F',
   reading: '#0891b2',
   exercise: '#059669',
   'quiz-boss': '#dc2626',
@@ -21,9 +21,9 @@ const NODE_COLORS: Record<ContentType, string> = {
 
 const STATE_RING: Record<NodeState, string> = {
   locked: '#6b7280',
-  available: '#f59e0b',
+  available: '#D4A84F',
   completed: '#10b981',
-  current: '#f59e0b',
+  current: '#D4A84F',
 };
 
 const STATE_LABELS: Record<NodeState, string> = {
@@ -33,11 +33,11 @@ const STATE_LABELS: Record<NodeState, string> = {
   current: 'Current',
 };
 
-const TYPE_ICONS: Record<ContentType, string> = {
-  video: '▶',
-  reading: '📄',
-  exercise: '✏️',
-  'quiz-boss': '⚔️',
+const TYPE_LABELS: Record<ContentType, string> = {
+  video: 'VID',
+  reading: 'READ',
+  exercise: 'EX',
+  'quiz-boss': 'BOSS',
 };
 
 interface Connection {
@@ -111,13 +111,19 @@ function useCoordinateMapper(nodes: ContentNode[], padding: number, width: numbe
       if (n.position[2] > maxZ) maxZ = n.position[2];
     }
 
-    const rangeX = maxX - minX || 1;
-    const rangeZ = maxZ - minZ || 1;
+    const rangeX = maxX - minX;
+    const rangeZ = maxZ - minZ;
 
+    // When all nodes share the same X (or Z), centre them so the map
+    // doesn't collapse to one edge of the SVG viewport.
     const mapX = (worldX: number) =>
-      padding + ((worldX - minX) / rangeX) * (width - padding * 2);
+      rangeX === 0
+        ? width / 2
+        : padding + ((worldX - minX) / rangeX) * (width - padding * 2);
     const mapZ = (worldZ: number) =>
-      padding + ((worldZ - minZ) / rangeZ) * (height - padding * 2);
+      rangeZ === 0
+        ? height / 2
+        : padding + ((worldZ - minZ) / rangeZ) * (height - padding * 2);
 
     return { mapX, mapZ, bounds: { minX, maxX, minZ, maxZ } };
   }, [nodes, padding, width, height]);
@@ -163,10 +169,14 @@ function MapSVG({
   // Map avatar 3D position to 2D
   const avatarSvg = useMemo(() => {
     if (!avatarPosition) return null;
-    const rangeX = (bounds.maxX - bounds.minX) || 1;
-    const rangeZ = (bounds.maxZ - bounds.minZ) || 1;
-    const sx = padding + ((avatarPosition[0] - bounds.minX) / rangeX) * (width - padding * 2);
-    const sy = padding + ((avatarPosition[2] - bounds.minZ) / rangeZ) * (height - padding * 2);
+    const rangeX = bounds.maxX - bounds.minX;
+    const rangeZ = bounds.maxZ - bounds.minZ;
+    const sx = rangeX === 0
+      ? width / 2
+      : padding + ((avatarPosition[0] - bounds.minX) / rangeX) * (width - padding * 2);
+    const sy = rangeZ === 0
+      ? height / 2
+      : padding + ((avatarPosition[2] - bounds.minZ) / rangeZ) * (height - padding * 2);
     return {
       x: Math.max(padding, Math.min(width - padding, sx)),
       y: Math.max(padding, Math.min(height - padding, sy)),
@@ -175,7 +185,7 @@ function MapSVG({
 
   const edgeColors: Record<string, string> = {
     completed: '#10b981',
-    available: '#f59e0b',
+    available: '#D4A84F',
     locked: '#374151',
   };
 
@@ -187,7 +197,7 @@ function MapSVG({
       style={{ display: 'block' }}
     >
       {/* Background */}
-      <rect x={0} y={0} width={width} height={height} rx={8} fill="#1e293b" />
+      <rect x={0} y={0} width={width} height={height} rx={8} fill="#0B2E26" />
 
       {/* Edges */}
       {connections.map((conn, i) => {
@@ -267,12 +277,19 @@ function MapSVG({
             {state === 'completed' && (
               <>
                 <circle cx={cx} cy={cy} r={r + 2} fill="none" stroke="#10b981" strokeWidth={3} />
-                <text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={r * 1.2} fontWeight="bold">✓</text>
+                <polyline
+                  points={`${cx - r * 0.45},${cy} ${cx - r * 0.1},${cy + r * 0.35} ${cx + r * 0.5},${cy - r * 0.35}`}
+                  fill="none"
+                  stroke="white"
+                  strokeWidth={Math.max(2, r * 0.25)}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </>
             )}
-            {/* Quiz boss icon */}
+            {/* Quiz boss marker (inner ring instead of star glyph) */}
             {node.type === 'quiz-boss' && state !== 'completed' && state !== 'locked' && (
-              <text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={r * 1.1}>★</text>
+              <circle cx={cx} cy={cy} r={r * 0.4} fill="none" stroke="white" strokeWidth={2} />
             )}
 
             {/* Label */}
@@ -296,8 +313,8 @@ function MapSVG({
       {/* Player position dot */}
       {avatarSvg && (
         <g>
-          <circle cx={avatarSvg.x} cy={avatarSvg.y} r={nodeRadius * 0.7} fill="#fbbf24" stroke="#ffffff" strokeWidth={2} />
-          <circle cx={avatarSvg.x} cy={avatarSvg.y} r={nodeRadius * 0.7} fill="none" stroke="#fbbf24" strokeWidth={1.5}>
+          <circle cx={avatarSvg.x} cy={avatarSvg.y} r={nodeRadius * 0.7} fill="#D4A84F" stroke="#ffffff" strokeWidth={2} />
+          <circle cx={avatarSvg.x} cy={avatarSvg.y} r={nodeRadius * 0.7} fill="none" stroke="#D4A84F" strokeWidth={1.5}>
             <animate attributeName="r" from={nodeRadius * 0.7} to={nodeRadius * 1.8} dur="2s" repeatCount="indefinite" />
             <animate attributeName="opacity" from="0.6" to="0" dur="2s" repeatCount="indefinite" />
           </circle>
@@ -377,14 +394,14 @@ function CourseNavigator({ nodes, completedNodeIds, nearbyNodeId, onNodeClick }:
                 className="w-3 h-3 rounded-full shrink-0"
                 style={{ backgroundColor: chapter.color }}
               />
-              <span className="text-sm font-semibold text-gray-200 truncate flex-1">
+              <span className="text-sm font-semibold text-white truncate flex-1">
                 {chapter.id === '__ungrouped__' ? 'General' : `Section ${ci + 1}`}
               </span>
-              <span className="text-xs text-gray-500 tabular-nums font-medium">
+              <span className="text-xs text-[#9ca3af] tabular-nums font-medium">
                 {completedCount}/{chapter.nodes.length}
               </span>
               <svg
-                className={`w-4 h-4 text-gray-500 transition-transform ${isOpen ? 'rotate-90' : ''}`}
+                className={`w-4 h-4 text-[#6b7280] transition-transform ${isOpen ? 'rotate-90' : ''}`}
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -424,7 +441,7 @@ function CourseNavigator({ nodes, completedNodeIds, nearbyNodeId, onNodeClick }:
                               ? 'hover:bg-white/8 cursor-pointer'
                               : 'opacity-40 cursor-not-allowed'
                             }
-                            ${isCurrent ? 'bg-amber-500/10 ring-1 ring-amber-500/30' : ''}
+                            ${isCurrent ? 'bg-brand-accent/10 ring-1 ring-brand-accent/30' : ''}
                           `}
                         >
                           {/* Status icon */}
@@ -438,26 +455,26 @@ function CourseNavigator({ nodes, completedNodeIds, nearbyNodeId, onNodeClick }:
                             ) : (
                               <div
                                 className={`w-5 h-5 rounded-full border-2 ${
-                                  isClickable ? 'border-amber-400' : 'border-gray-600'
+                                  isClickable ? 'border-brand-accent' : 'border-[#6b7280]'
                                 }`}
                                 style={isClickable ? { borderColor: chapter.color } : undefined}
                               />
                             )}
                           </div>
 
-                          {/* Type icon */}
-                          <span className="shrink-0 text-sm">
-                            {TYPE_ICONS[node.type]}
+                          {/* Type label */}
+                          <span className="shrink-0 text-[9px] font-bold tracking-wider text-[#9ca3af] w-10 text-left">
+                            {TYPE_LABELS[node.type]}
                           </span>
 
                           {/* Title */}
                           <span
                             className={`truncate flex-1 text-sm ${
                               isCompleted
-                                ? 'text-gray-400 line-through decoration-gray-600'
+                                ? 'text-[#6b7280] line-through decoration-[#6b7280]'
                                 : isClickable
-                                  ? 'text-gray-100'
-                                  : 'text-gray-500'
+                                  ? 'text-white/90'
+                                  : 'text-[#6b7280]'
                             }`}
                           >
                             {node.title}
@@ -465,7 +482,7 @@ function CourseNavigator({ nodes, completedNodeIds, nearbyNodeId, onNodeClick }:
 
                           {/* XP badge */}
                           {!isCompleted && isClickable && (
-                            <span className="shrink-0 text-xs text-amber-400/70 tabular-nums font-medium">
+                            <span className="shrink-0 text-xs text-brand-accent/80 tabular-nums font-medium">
                               +{node.xpReward}
                             </span>
                           )}
@@ -620,7 +637,7 @@ export function MapOverviewModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.92, y: 20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="relative w-full max-w-5xl bg-[#1e293b] rounded-2xl shadow-2xl overflow-hidden border border-white/10 flex"
+            className="relative w-full max-w-5xl bg-brand-dark-card rounded-2xl shadow-2xl shadow-black/60 overflow-hidden border border-white/10 flex text-white"
             onClick={(e) => e.stopPropagation()}
             tabIndex={-1}
             style={{ maxHeight: 'calc(100vh - 80px)' }}
@@ -630,25 +647,28 @@ export function MapOverviewModal({
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <div className="w-10 h-10 rounded-xl bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#D4A84F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
                       <line x1="9" y1="3" x2="9" y2="18" />
                       <line x1="15" y1="6" x2="15" y2="21" />
                     </svg>
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-white">{mapTitle}</h2>
-                    <p className="text-base text-gray-400 mt-0.5">
-                      Progress: <span className="text-emerald-400 font-semibold">{progress}%</span>
-                      {' '}&middot;{' '}
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-brand-accent font-semibold mb-1">
+                      Map overview
+                    </p>
+                    <h2 className="text-xl font-bold text-white tracking-tight">{mapTitle}</h2>
+                    <p className="text-sm text-[#9ca3af] mt-0.5">
+                      Progress: <span className="text-brand-accent font-semibold">{progress}%</span>
+                      {' '}·{' '}
                       {completedNodeIds.filter(id => nodes.some(n => n.id === id)).length}/{nodes.length} nodes
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={onClose}
-                  className="p-2.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                  className="p-2.5 text-[#6b7280] hover:text-white hover:bg-white/5 rounded-full transition-colors"
                   aria-label="Close map overview"
                 >
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -708,19 +728,22 @@ export function MapOverviewModal({
 
                 {/* Tooltip on hover */}
                 {hoveredNodeData && (
-                  <div className="absolute top-4 left-4 bg-gray-900/90 backdrop-blur-sm rounded-lg px-4 py-3 pointer-events-none border border-white/10">
+                  <div className="absolute top-4 left-4 bg-brand-dark/90 backdrop-blur-sm rounded-xl px-4 py-3 pointer-events-none border border-white/10">
                     <div className="text-white font-semibold text-base">{hoveredNodeData.title}</div>
-                    <div className="text-gray-400 text-sm mt-1">{hoveredNodeData.type} &middot; +{hoveredNodeData.xpReward} XP</div>
+                    <div className="text-[#9ca3af] text-sm mt-1">{hoveredNodeData.type} · +{hoveredNodeData.xpReward} XP</div>
                   </div>
                 )}
               </div>
             </div>
 
             {/* Right: course outline sidebar */}
-            <div className="w-[300px] border-l border-white/10 flex flex-col bg-[#0f172a]/50 shrink-0">
-              <div className="px-5 py-4 border-b border-white/8">
-                <h3 className="text-base font-bold text-white">Course Outline</h3>
-                <p className="text-sm text-gray-500 mt-1">Click any available item to open</p>
+            <div className="w-[300px] border-l border-white/10 flex flex-col bg-brand-dark/70 shrink-0">
+              <div className="px-5 py-4 border-b border-white/5">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-brand-accent font-semibold mb-1">
+                  Curriculum
+                </p>
+                <h3 className="text-base font-bold text-white tracking-tight">Course outline</h3>
+                <p className="text-xs text-[#9ca3af] mt-1">Click any available item to open</p>
               </div>
               <div className="flex-1 overflow-y-auto px-3 py-3 scrollbar-thin">
                 <CourseNavigator

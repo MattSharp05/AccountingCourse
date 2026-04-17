@@ -10,6 +10,7 @@ import {
   addEdge,
   useReactFlow,
   ReactFlowProvider,
+  ConnectionMode,
   type Connection,
   type Node,
   type Edge,
@@ -17,10 +18,13 @@ import {
 import '@xyflow/react/dist/style.css';
 import { motion, AnimatePresence } from 'framer-motion';
 
-import { useMap, useUpdateMap, useChaptersForMap, useContentItemsForMap } from '../../hooks';
+import { ArrowLeft, Hammer, Flag, Trash2, X, ArrowLeftRight, Lock, Link2, GripVertical } from 'lucide-react';
+import { useMap, useUpdateMap, useChaptersForMap } from '../../hooks';
+import { useCheckpointsForMap } from '../../hooks/useCheckpoints';
 import { nodeTypes } from '../../components/admin/canvas/ContentNode';
 import { edgeTypes } from '../../components/admin/canvas/PrerequisiteEdge';
 import { EditorSidebar } from '../../components/admin/sidebar/EditorSidebar';
+import { BrandButton } from '../../components/ui';
 import { buildMapConfig, SECTION_COLORS } from '../../utils/buildMap';
 import type { ContentNodeData } from '../../types/admin';
 
@@ -43,9 +47,12 @@ function MapEditorInner() {
 
   // React Query hooks
   const { data: map } = useMap(mapId!);
-  const updateMapMut = useUpdateMap();
+  // Destructure mutate so we get a stable function reference. The mutation
+  // object itself is recreated each render, which would loop any effect that
+  // depends on it.
+  const { mutate: updateMap } = useUpdateMap();
   const { data: chapters = [] } = useChaptersForMap(mapId!);
-  const { data: contentItems = [] } = useContentItemsForMap(mapId!);
+  const { data: checkpoints = [] } = useCheckpointsForMap(mapId!);
 
   // ── React Flow state ──────────────────────────────────
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<ContentNodeData>>([]);
@@ -65,8 +72,8 @@ function MapEditorInner() {
         });
 
         const enriched = map.canvasData.nodes.map((node) => {
-          const item = contentItems.find((ci) => ci.id === node.data.contentItemId);
-          const sectionColor = item ? chapterColorMap.get(item.chapterId) : undefined;
+          const cp = checkpoints.find((c) => c.id === node.data.checkpointId);
+          const sectionColor = cp ? chapterColorMap.get(cp.chapterId) : undefined;
           return { ...node, data: { ...node.data, sectionColor } };
         });
         setNodes(enriched);
@@ -76,7 +83,7 @@ function MapEditorInner() {
         setEdges(map.canvasData.edges.map((e) => ({ ...e, type: e.type || 'prerequisite' })));
       }
     }
-  }, [map, chapters, contentItems, setNodes, setEdges]);
+  }, [map, chapters, checkpoints, setNodes, setEdges]);
 
   // ── Title editing ─────────────────────────────────────
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -92,10 +99,10 @@ function MapEditorInner() {
 
   const commitTitle = useCallback(() => {
     if (mapId && titleDraft.trim()) {
-      updateMapMut.mutate({ id: mapId!, title: titleDraft.trim() });
+      updateMap({ id: mapId!, title: titleDraft.trim() });
     }
     setIsEditingTitle(false);
-  }, [mapId, titleDraft, updateMapMut]);
+  }, [mapId, titleDraft, updateMap]);
 
   // ── Auto-save (debounced) ───────────────────────────────
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -122,7 +129,7 @@ function MapEditorInner() {
     saveTimerRef.current = setTimeout(() => {
       const viewport = reactFlowInstance.getViewport();
       console.log('[MapEditor] Auto-saving canvas:', { nodeCount: nodesRef.current.length, edgeCount: edgesRef.current.length });
-      updateMapMut.mutate({
+      updateMap({
         id: mapId!,
         canvasData: { nodes: nodesRef.current, edges: edgesRef.current, viewport },
       });
@@ -133,7 +140,7 @@ function MapEditorInner() {
         clearTimeout(saveTimerRef.current);
       }
     };
-  }, [nodes, edges, mapId, reactFlowInstance, updateMapMut]);
+  }, [nodes, edges, mapId, reactFlowInstance, updateMap]);
 
   // ── Navigation blocker: warn if leaving without building ──
   const blocker = useBlocker(
@@ -152,6 +159,9 @@ function MapEditorInner() {
   }, [needsBuild]);
 
   // ── Connection handling ───────────────────────────────
+  // Track which node the user started dragging from so we always preserve
+  // their intended direction (React Flow swaps source/target when the user
+  // starts from a target-type handle).
   const onConnect = useCallback(
     (connection: Connection) => {
       if (connection.source === connection.target) return;
@@ -161,6 +171,7 @@ function MapEditorInner() {
       );
       if (duplicate) return;
 
+      console.log('[MapEditor] New edge:', connection.source, `(${connection.sourceHandle})`, '→', connection.target, `(${connection.targetHandle})`);
       setEdges((eds) =>
         addEdge({ ...connection, type: 'prerequisite' }, eds)
       );
@@ -182,13 +193,13 @@ function MapEditorInner() {
       if (!dataStr) return;
 
       try {
-        const contentItem = JSON.parse(dataStr);
+        const dropData = JSON.parse(dataStr);
         const position = reactFlowInstance.screenToFlowPosition({
           x: event.clientX,
           y: event.clientY,
         });
 
-        const chapter = chapters.find((c) => c.id === contentItem.chapterId);
+        const chapter = chapters.find((c) => c.id === dropData.chapterId);
 
         // Resolve section color from chapter order
         const sortedChapters = [...chapters].sort((a, b) => a.order - b.order);
@@ -199,13 +210,12 @@ function MapEditorInner() {
         const isFirstNode = nodesRef.current.length === 0;
 
         const newNode: Node<ContentNodeData> = {
-          id: `node-${contentItem.contentItemId}`,
+          id: `node-${dropData.checkpointId}`,
           type: 'content',
           position,
           data: {
-            contentItemId: contentItem.contentItemId,
-            title: contentItem.title,
-            type: contentItem.type,
+            checkpointId: dropData.checkpointId,
+            title: dropData.title,
             chapterTitle: chapter?.title,
             sectionColor,
             isStart: isFirstNode ? true : undefined,
@@ -291,6 +301,21 @@ function MapEditorInner() {
     [setNodes]
   );
 
+  // Flip an edge's direction (swap source ↔ target)
+  const handleFlipEdge = useCallback(
+    (edgeId: string) => {
+      setEdges((eds) =>
+        eds.map((e) =>
+          e.id === edgeId
+            ? { ...e, source: e.target, target: e.source, sourceHandle: e.targetHandle, targetHandle: e.sourceHandle }
+            : e
+        )
+      );
+      setContextMenu(null);
+    },
+    [setEdges]
+  );
+
   const handleToggleEdgeType = useCallback(
     (edgeId: string, currentType: string) => {
       const newType = currentType === 'prerequisite' ? 'path' : 'prerequisite';
@@ -312,10 +337,10 @@ function MapEditorInner() {
     [setNodes, setEdges]
   );
 
-  // Remove by contentItemId (called from sidebar when deleting a content item)
-  const handleRemoveNodeByContentItemId = useCallback(
-    (contentItemId: string) => {
-      const rfNodeId = `node-${contentItemId}`;
+  // Remove by checkpointId (called from sidebar when deleting a checkpoint)
+  const handleRemoveNodeByCheckpointId = useCallback(
+    (checkpointId: string) => {
+      const rfNodeId = `node-${checkpointId}`;
       setNodes((nds) => nds.filter((n) => n.id !== rfNodeId));
       setEdges((eds) => eds.filter((e) => e.source !== rfNodeId && e.target !== rfNodeId));
     },
@@ -331,6 +356,16 @@ function MapEditorInner() {
     [setEdges]
   );
 
+  // Listen for the custom DOM event dispatched by PrerequisiteEdge / PathEdge X buttons
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const edgeId = (e as CustomEvent).detail?.edgeId;
+      if (edgeId) setEdges((eds) => eds.filter((edge) => edge.id !== edgeId));
+    };
+    document.addEventListener('prerequisite-edge-delete', handler);
+    return () => document.removeEventListener('prerequisite-edge-delete', handler);
+  }, [setEdges]);
+
   // ── Build Map ─────────────────────────────────────────
   const [toast, setToast] = useState<string | null>(null);
 
@@ -339,10 +374,9 @@ function MapEditorInner() {
 
     try {
       console.log('[MapEditor] Building map config...');
-      const mapContentItems = contentItems;
 
-      const result = buildMapConfig(nodes, edges, mapContentItems, chapters);
-      updateMapMut.mutate({ id: mapId!, mapConfig: result });
+      const result = buildMapConfig(nodes, edges, checkpoints, chapters);
+      updateMap({ id: mapId!, mapConfig: result });
 
       setNeedsBuild(false);
       setToast('Map built successfully!');
@@ -353,110 +387,90 @@ function MapEditorInner() {
       setToast('Build failed. Check console for details.');
       setTimeout(() => setToast(null), 4000);
     }
-  }, [mapId, nodes, edges, contentItems, chapters, updateMapMut]);
+  }, [mapId, nodes, edges, checkpoints, chapters, updateMap]);
 
   // ── Guard: map not found ──────────────────────────────
   if (!map) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-gray-50">
+      <div className="h-screen w-full flex items-center justify-center bg-brand-dark text-white">
         <div className="text-center">
-          <h2 className="text-xl font-semibold text-gray-700 mb-2">Map not found</h2>
-          <p className="text-gray-500 mb-4">
-            The map you are looking for does not exist.
-          </p>
-          <button
-            onClick={() => navigate(-1)}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-          >
-            Go Back
-          </button>
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-brand-accent mb-3">Not found</p>
+          <h2 className="text-xl font-bold text-white mb-2">Map not found</h2>
+          <p className="text-[#9ca3af] mb-6">The map you are looking for does not exist.</p>
+          <BrandButton variant="outline" onClick={() => navigate(-1)}>
+            Go back
+          </BrandButton>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen w-full flex flex-col overflow-hidden">
+    <div className="h-screen w-full flex flex-col overflow-hidden bg-brand-dark text-white">
       {/* ── Top Bar ─────────────────────────────────────── */}
-      <div className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 shrink-0">
+      <div className="h-16 bg-brand-dark-lighter border-b border-white/5 flex items-center justify-between px-5 shrink-0">
         {/* Left: Back + Title */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <button
             onClick={() => navigate(-1)}
-            className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 transition-colors text-sm font-medium"
+            className="flex items-center gap-1.5 text-[#9ca3af] hover:text-white transition-colors text-sm font-medium px-3 py-1.5 rounded-full hover:bg-white/5"
           >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M10 19l-7-7m0 0l7-7m-7 7h18"
-              />
-            </svg>
+            <ArrowLeft className="w-4 h-4" />
             Back
           </button>
 
-          <div className="w-px h-6 bg-gray-200" />
+          <div className="w-px h-6 bg-white/10" />
 
-          {isEditingTitle ? (
-            <input
-              ref={titleInputRef}
-              value={titleDraft}
-              onChange={(e) => setTitleDraft(e.target.value)}
-              onBlur={commitTitle}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') commitTitle();
-                if (e.key === 'Escape') {
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-brand-accent font-semibold leading-none mb-1">
+              Map editor
+            </p>
+            {isEditingTitle ? (
+              <input
+                ref={titleInputRef}
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onBlur={commitTitle}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitTitle();
+                  if (e.key === 'Escape') {
+                    setTitleDraft(map.title);
+                    setIsEditingTitle(false);
+                  }
+                }}
+                className="text-base font-semibold text-white bg-white/5 border border-brand-accent/50 rounded-md outline-none px-2 py-0.5"
+              />
+            ) : (
+              <button
+                onClick={() => {
                   setTitleDraft(map.title);
-                  setIsEditingTitle(false);
-                }
-              }}
-              className="text-lg font-semibold text-gray-900 bg-transparent border-b-2 border-indigo-500 outline-none px-1 py-0.5"
-            />
-          ) : (
-            <button
-              onClick={() => {
-                setTitleDraft(map.title);
-                setIsEditingTitle(true);
-              }}
-              className="text-lg font-semibold text-gray-900 hover:text-indigo-600 transition-colors cursor-text"
-              title="Click to edit title"
-            >
-              {map.title}
-            </button>
-          )}
+                  setIsEditingTitle(true);
+                }}
+                className="text-base font-semibold text-white hover:text-brand-accent transition-colors cursor-text"
+                title="Click to edit title"
+              >
+                {map.title}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Right: Build button */}
         <div className="flex items-center gap-4">
-          <button
+          {needsBuild && (
+            <span className="hidden md:flex items-center gap-1.5 text-xs text-brand-accent">
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-accent animate-pulse" />
+              Unbuilt changes
+            </span>
+          )}
+          <BrandButton
             onClick={handleBuildMap}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors shadow-sm ${
-              needsBuild
-                ? 'bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800'
-                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-            }`}
+            variant={needsBuild ? 'primary' : 'outline'}
+            size="sm"
+            leftIcon={<Hammer className="w-3.5 h-3.5" />}
           >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
-              />
-            </svg>
-            Build Map
-          </button>
+            Build map
+          </BrandButton>
         </div>
       </div>
 
@@ -477,6 +491,7 @@ function MapEditorInner() {
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             defaultEdgeOptions={{ type: 'prerequisite' }}
+            connectionMode={ConnectionMode.Loose}
             snapToGrid
             snapGrid={[15, 15]}
             fitView
@@ -497,7 +512,7 @@ function MapEditorInner() {
           {/* Context menu */}
           {contextMenu && (
             <div
-              className="fixed z-50 bg-white rounded-lg shadow-xl border border-gray-200 py-1 min-w-[180px]"
+              className="fixed z-50 bg-brand-dark-card border border-white/10 rounded-xl shadow-2xl shadow-black/60 py-1.5 min-w-[190px] text-sm text-white"
               style={{ left: contextMenu.x, top: contextMenu.y }}
             >
               {contextMenu.target.kind === 'node' && (
@@ -505,27 +520,25 @@ function MapEditorInner() {
                   {contextMenu.target.isStart ? (
                     <button
                       onClick={() => handleClearStart(contextMenu.target.kind === 'node' ? contextMenu.target.nodeId : '')}
-                      className="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 flex items-center gap-2"
+                      className="w-full px-4 py-2 text-left text-[#9ca3af] hover:text-white hover:bg-white/5 flex items-center gap-2.5"
                     >
-                      <span className="text-gray-400">✕</span>
-                      Clear Start
+                      <X className="w-3.5 h-3.5 text-[#6b7280]" />
+                      Clear start
                     </button>
                   ) : (
                     <button
                       onClick={() => handleSetStart(contextMenu.target.kind === 'node' ? contextMenu.target.nodeId : '')}
-                      className="w-full px-4 py-2 text-sm text-left hover:bg-amber-50 flex items-center gap-2"
+                      className="w-full px-4 py-2 text-left text-[#9ca3af] hover:text-brand-accent hover:bg-brand-accent/10 flex items-center gap-2.5"
                     >
-                      <span className="text-amber-500">&#9873;</span>
-                      Set as Start
+                      <Flag className="w-3.5 h-3.5 text-brand-accent" />
+                      Set as start
                     </button>
                   )}
                   <button
                     onClick={() => handleRemoveFromCanvas(contextMenu.target.kind === 'node' ? contextMenu.target.nodeId : '')}
-                    className="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 flex items-center gap-2"
+                    className="w-full px-4 py-2 text-left text-[#9ca3af] hover:text-white hover:bg-white/5 flex items-center gap-2.5"
                   >
-                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878l4.242 4.242M21 21l-4.879-4.879" />
-                    </svg>
+                    <GripVertical className="w-3.5 h-3.5 text-[#6b7280]" />
                     Remove from canvas
                   </button>
                 </>
@@ -535,20 +548,31 @@ function MapEditorInner() {
                   <button
                     onClick={() => {
                       if (contextMenu.target.kind === 'edge') {
+                        handleFlipEdge(contextMenu.target.edgeId);
+                      }
+                    }}
+                    className="w-full px-4 py-2 text-left text-[#9ca3af] hover:text-white hover:bg-white/5 flex items-center gap-2.5"
+                  >
+                    <ArrowLeftRight className="w-3.5 h-3.5 text-[#6b7280]" />
+                    Flip direction
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (contextMenu.target.kind === 'edge') {
                         handleToggleEdgeType(contextMenu.target.edgeId, contextMenu.target.edgeType);
                       }
                     }}
-                    className="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 flex items-center gap-2"
+                    className="w-full px-4 py-2 text-left text-[#9ca3af] hover:text-white hover:bg-white/5 flex items-center gap-2.5"
                   >
                     {contextMenu.target.edgeType === 'prerequisite' ? (
                       <>
-                        <span className="text-gray-400">&#8674;</span>
-                        Change to Path
+                        <Link2 className="w-3.5 h-3.5 text-[#6b7280]" />
+                        Change to path
                       </>
                     ) : (
                       <>
-                        <span className="text-amber-500">&#128274;</span>
-                        Change to Pre-req
+                        <Lock className="w-3.5 h-3.5 text-brand-accent" />
+                        Change to pre-req
                       </>
                     )}
                   </button>
@@ -558,11 +582,9 @@ function MapEditorInner() {
                         handleDeleteEdge(contextMenu.target.edgeId);
                       }
                     }}
-                    className="w-full px-4 py-2 text-sm text-left hover:bg-red-50 text-red-600 flex items-center gap-2"
+                    className="w-full px-4 py-2 text-left text-red-400 hover:bg-red-500/10 flex items-center gap-2.5"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
+                    <Trash2 className="w-3.5 h-3.5" />
                     Delete connection
                   </button>
                 </>
@@ -574,8 +596,8 @@ function MapEditorInner() {
         {/* Sidebar */}
         <EditorSidebar
           mapId={mapId!}
-          placedItemIds={nodes.map((n) => n.data.contentItemId)}
-          onRemoveNode={handleRemoveNodeByContentItemId}
+          placedCheckpointIds={nodes.map((n) => n.data.checkpointId)}
+          onRemoveNode={handleRemoveNodeByCheckpointId}
         />
       </div>
 
@@ -586,7 +608,7 @@ function MapEditorInner() {
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 50 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-lg shadow-lg text-sm font-medium z-50"
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-brand-dark-card border border-white/10 text-white px-5 py-3 rounded-full shadow-2xl shadow-black/60 text-sm font-medium z-50"
           >
             {toast}
           </motion.div>
@@ -600,40 +622,47 @@ function MapEditorInner() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-xl shadow-xl w-[380px] p-6"
+              className="bg-brand-dark-card border border-white/10 rounded-2xl shadow-2xl shadow-black/60 w-[420px] p-7 text-white"
             >
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-brand-accent mb-2">
+                Unsaved
+              </p>
+              <h3 className="text-lg font-bold text-white mb-2 tracking-tight">
                 Unbuilt changes
               </h3>
-              <p className="text-sm text-gray-600 mb-5">
-                You have canvas changes that haven't been built yet. Would you like to build the map before leaving?
+              <p className="text-sm text-[#9ca3af] mb-6 leading-relaxed">
+                You have canvas changes that haven&apos;t been built yet. Would you like to build the map before leaving?
               </p>
               <div className="flex items-center gap-2">
-                <button
+                <BrandButton
+                  variant="outline"
+                  size="sm"
                   onClick={() => blocker.proceed()}
-                  className="flex-1 px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  className="flex-1"
                 >
-                  Leave without building
-                </button>
-                <button
+                  Leave anyway
+                </BrandButton>
+                <BrandButton
+                  variant="primary"
+                  size="sm"
                   onClick={async () => {
                     await handleBuildMap();
                     blocker.proceed();
                   }}
-                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors"
+                  className="flex-1"
                 >
-                  Build & leave
-                </button>
+                  Build &amp; leave
+                </BrandButton>
               </div>
               <button
                 onClick={() => blocker.reset()}
-                className="w-full mt-2 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors text-center"
+                className="w-full mt-3 py-2 text-xs uppercase tracking-[0.2em] text-[#6b7280] hover:text-white transition-colors text-center"
               >
                 Stay on page
               </button>

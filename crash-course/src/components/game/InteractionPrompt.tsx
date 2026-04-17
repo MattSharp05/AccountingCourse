@@ -16,19 +16,19 @@ export function InteractionPrompt({ nodeTitle, onInteract }: InteractionPromptPr
           transition={{ type: 'spring', damping: 20, stiffness: 300 }}
           className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-50"
         >
-          <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border-2 border-primary-200 px-6 py-4 text-center">
-            <p className="text-lg font-bold text-gray-800 mb-2">{nodeTitle}</p>
+          <div className="bg-brand-dark-card/90 backdrop-blur-md rounded-2xl shadow-2xl shadow-black/50 border border-brand-accent/30 px-6 py-4 text-center">
+            <p className="text-lg font-bold text-white mb-2 tracking-tight">{nodeTitle}</p>
             <div className="flex items-center justify-center gap-2">
-              <span className="text-sm text-gray-500">Press</span>
-              <kbd className="px-3 py-1.5 bg-primary-100 text-primary-700 rounded-lg font-bold text-sm border border-primary-200">
+              <span className="text-sm text-[#9ca3af]">Press</span>
+              <kbd className="px-3 py-1.5 bg-brand-accent/10 text-brand-accent rounded-lg font-bold text-sm border border-brand-accent/30">
                 E
               </kbd>
-              <span className="text-sm text-gray-500">or</span>
+              <span className="text-sm text-[#9ca3af]">or</span>
               <button
                 onClick={onInteract}
-                className="px-4 py-1.5 bg-primary-600 text-white rounded-lg font-semibold text-sm hover:bg-primary-700 transition-colors"
+                className="px-4 py-1.5 rounded-full bg-gradient-to-r from-brand-accent to-brand-accent-dark text-brand-dark font-semibold text-sm hover:shadow-[0_0_20px_rgba(212,168,79,0.4)] transition-all"
               >
-                Click to Open
+                Click to open
               </button>
             </div>
           </div>

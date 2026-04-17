@@ -1,41 +1,12 @@
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
-import type { ContentNodeData, ContentItemType } from '../../../types/admin';
+import type { ContentNodeData } from '../../../types/admin';
 
 type ContentNodeType = Node<ContentNodeData, 'content'>;
 
-// ── Color + icon mappings per content type ──────────────────
-
-const typeAccentColors: Record<ContentItemType, string> = {
-  video: '#4F46E5',
-  pdf: '#0891b2',
-  text: '#059669',
-  file: '#d97706',
-  quiz: '#dc2626',
-};
-
-const typeIcons: Record<ContentItemType, string> = {
-  video: '\u25B6',        // ▶
-  pdf: '\uD83D\uDCC4',   // 📄
-  text: '\uD83D\uDCDD',  // 📝
-  file: '\uD83D\uDCCE',  // 📎
-  quiz: '\u2694\uFE0F',  // ⚔️
-};
-
-const typeLabels: Record<ContentItemType, string> = {
-  video: 'Video',
-  pdf: 'PDF',
-  text: 'Text',
-  file: 'File',
-  quiz: 'Quiz',
-};
-
-// ── ContentNode ─────────────────────────────────────────────
+// ── ContentNode (Checkpoint on canvas) ──────────────────────
 
 export function ContentNode({ data, selected }: NodeProps<ContentNodeType>) {
-  const typeColor = typeAccentColors[data.type] ?? '#6b7280';
-  const accentColor = data.sectionColor || typeColor;
-  const icon = typeIcons[data.type] ?? '?';
-  const label = typeLabels[data.type] ?? data.type;
+  const accentColor = data.sectionColor || '#6366f1';
 
   return (
     <div
@@ -46,7 +17,7 @@ export function ContentNode({ data, selected }: NodeProps<ContentNodeType>) {
         ${data.isStart ? 'border-amber-400 ring-2 ring-amber-200' : selected ? 'border-indigo-400' : 'border-gray-200'}
       `}
     >
-      {/* Colored top accent bar — uses section color when available */}
+      {/* Colored top accent bar */}
       <div
         className="h-1.5 rounded-t-md"
         style={{ backgroundColor: data.isStart ? '#f59e0b' : accentColor }}
@@ -61,20 +32,19 @@ export function ContentNode({ data, selected }: NodeProps<ContentNodeType>) {
           </span>
         )}
 
-        {/* Icon + title row */}
-        <div className="flex items-start gap-1.5">
-          <span className="text-base leading-none mt-0.5 shrink-0">{icon}</span>
+        {/* Title */}
+        <div className="flex items-start">
           <span className="text-sm font-medium text-gray-900 truncate leading-tight">
             {data.title}
           </span>
         </div>
 
-        {/* Type badge */}
+        {/* Checkpoint badge */}
         <span
           className="self-start text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-sm text-white leading-none"
           style={{ backgroundColor: accentColor }}
         >
-          {label}
+          Checkpoint
         </span>
 
         {/* Chapter subtitle */}
@@ -85,16 +55,19 @@ export function ContentNode({ data, selected }: NodeProps<ContentNodeType>) {
         )}
       </div>
 
-      {/* Handles */}
+      {/* Handles — both are type="source" so either can start a connection.
+           connectionMode="loose" on ReactFlow allows connecting to any handle. */}
       <Handle
-        type="target"
+        type="source"
         position={Position.Top}
+        id="top"
         className="!w-2.5 !h-2.5 !border-2 !border-white !-top-1.5"
         style={{ backgroundColor: accentColor }}
       />
       <Handle
         type="source"
         position={Position.Bottom}
+        id="bottom"
         className="!w-2.5 !h-2.5 !border-2 !border-white !-bottom-1.5"
         style={{ backgroundColor: accentColor }}
       />

@@ -15,10 +15,10 @@ export function StudentAuthGuard({ children }: { children: ReactNode }) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-brand-dark">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm text-gray-500 font-medium">Loading...</span>
+          <div className="w-8 h-8 border-2 border-brand-accent border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm text-[#9ca3af]">Loading...</span>
         </div>
       </div>
     );

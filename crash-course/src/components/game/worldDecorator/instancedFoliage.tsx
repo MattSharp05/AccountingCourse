@@ -2,7 +2,8 @@ import { useMemo, useEffect, useRef, Suspense } from 'react';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import type { DecorationInstance } from './types';
-import { ASSET_PATHS } from './presets';
+import { ASSET_PATHS, ASSET_BASE_SCALES } from './presets';
+import type { AssetCategory } from './presets';
 
 // ── Preload all assets ──────────────────────────────────
 
@@ -93,9 +94,10 @@ function mergeBufferGeometries(geometries: THREE.BufferGeometry[]): THREE.Buffer
 interface VariantGroupProps {
   path: string;
   instances: DecorationInstance[];
+  baseScale: number;
 }
 
-function VariantGroup({ path, instances }: VariantGroupProps) {
+function VariantGroup({ path, instances, baseScale }: VariantGroupProps) {
   const { scene } = useGLTF(path);
   const meshRef = useRef<THREE.InstancedMesh>(null);
 
@@ -134,13 +136,13 @@ function VariantGroup({ path, instances }: VariantGroupProps) {
       const inst = instances[i];
       dummy.position.set(inst.x, inst.y, inst.z);
       dummy.rotation.set(0, inst.rotation, 0);
-      dummy.scale.setScalar(inst.scale);
+      dummy.scale.setScalar(inst.scale * baseScale);
       dummy.updateMatrix();
       meshRef.current.setMatrixAt(i, dummy.matrix);
     }
 
     meshRef.current.instanceMatrix.needsUpdate = true;
-  }, [instances, geometry]);
+  }, [instances, geometry, baseScale]);
 
   if (!geometry || instances.length === 0) return null;
 
@@ -164,7 +166,7 @@ interface InstancedFoliageProps {
 export function InstancedFoliage({ decorations }: InstancedFoliageProps) {
   // Group decorations by category + variantIndex → one InstancedMesh per group
   const groups = useMemo(() => {
-    const map = new Map<string, { path: string; instances: DecorationInstance[] }>();
+    const map = new Map<string, { path: string; instances: DecorationInstance[]; category: AssetCategory }>();
 
     for (const dec of decorations) {
       const paths = ASSET_PATHS[dec.category];
@@ -173,7 +175,7 @@ export function InstancedFoliage({ decorations }: InstancedFoliageProps) {
       const key = `${dec.category}_${varIdx}`;
 
       if (!map.has(key)) {
-        map.set(key, { path, instances: [] });
+        map.set(key, { path, instances: [], category: dec.category });
       }
       map.get(key)!.instances.push(dec);
     }
@@ -183,9 +185,9 @@ export function InstancedFoliage({ decorations }: InstancedFoliageProps) {
 
   return (
     <group>
-      {groups.map(([key, { path, instances }]) => (
+      {groups.map(([key, { path, instances, category }]) => (
         <Suspense key={key} fallback={null}>
-          <VariantGroup path={path} instances={instances} />
+          <VariantGroup path={path} instances={instances} baseScale={ASSET_BASE_SCALES[category]} />
         </Suspense>
       ))}
     </group>

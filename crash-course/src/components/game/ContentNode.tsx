@@ -3,7 +3,6 @@ import { useFrame } from '@react-three/fiber';
 import { Html, Float } from '@react-three/drei';
 import * as THREE from 'three';
 import type { ContentNode as ContentNodeType, ContentType } from '../../types/game';
-import { useCompletedNodes } from '../../stores';
 
 interface ContentNodeProps {
   node: ContentNodeType;
@@ -12,7 +11,7 @@ interface ContentNodeProps {
   onInteract: () => void;
   allNodes?: ContentNodeType[];
   edges?: { source: string; target: string }[];
-  completedNodeIds?: string[];
+  completedNodeIds: string[];
 }
 
 const nodeColors: Record<ContentType, { primary: string; glow: string }> = {
@@ -142,17 +141,14 @@ function MiniGraphSVG({
             {isCompleted && !isCurrent && (
               <>
                 <circle cx={cx} cy={cy} r={r + 2} fill="none" stroke="#10b981" strokeWidth={2} />
-                <text
-                  x={cx}
-                  y={cy + 1}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fill="#ffffff"
-                  fontSize={r * 1.1}
-                  fontWeight="bold"
-                >
-                  ✓
-                </text>
+                <polyline
+                  points={`${cx - r * 0.45},${cy} ${cx - r * 0.1},${cy + r * 0.35} ${cx + r * 0.5},${cy - r * 0.35}`}
+                  fill="none"
+                  stroke="#ffffff"
+                  strokeWidth={Math.max(2, r * 0.25)}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </>
             )}
           </g>
@@ -291,12 +287,12 @@ function HoloBillboard({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: 30,
               color: '#fff',
-              lineHeight: 1,
             }}
           >
-            ✓
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
           </div>
         )}
       </div>
@@ -308,8 +304,7 @@ export function ContentNode3D({ node, isUnlocked, isStart, onInteract, allNodes,
   const meshRef = useRef<THREE.Group>(null);
   const glowRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
-  const storeCompletedNodes = useCompletedNodes();
-  const completed = completedNodeIds ?? storeCompletedNodes;
+  const completed = completedNodeIds;
   const isCompleted = completed.includes(node.id);
 
   // Use group color when available, otherwise fall back to type-based colors

@@ -2,14 +2,16 @@ import { useEffect, useMemo } from 'react';
 import { useGLTF } from '@react-three/drei';
 import { applyToonMaterials } from './applyToonMaterial';
 
-const BASE = '/models/environment/gltf';
+const BASE = '/models/environment/nature';
 
 const TREE_PATHS = [
-  `${BASE}/Tree_1_A_Color1.gltf`,
-  `${BASE}/Tree_2_A_Color1.gltf`,
-  `${BASE}/Tree_3_A_Color1.gltf`,
-  `${BASE}/Tree_4_A_Color1.gltf`,
+  `${BASE}/CommonTree_1.gltf`,
+  `${BASE}/CommonTree_2.gltf`,
+  `${BASE}/Pine_1.gltf`,
+  `${BASE}/Pine_2.gltf`,
 ] as const;
+
+const TREE_BASE_SCALE = 0.5;
 
 // Preload all tree variants
 TREE_PATHS.forEach((path) => useGLTF.preload(path));
@@ -34,7 +36,7 @@ export function ModelTree({ position, scale = 1, variant = 0 }: ModelTreeProps) 
     <primitive
       object={clonedScene}
       position={position}
-      scale={scale}
+      scale={scale * TREE_BASE_SCALE}
     />
   );
 }

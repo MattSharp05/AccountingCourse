@@ -31,15 +31,11 @@ export function XpGainAnimation({ amount, show, onComplete }: XpGainAnimationPro
           transition={{ duration: 0.5, ease: 'easeOut' }}
           className="fixed top-1/3 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none"
         >
-          <div className="flex items-center gap-2 bg-gradient-to-r from-amber-400 to-orange-500 text-white px-6 py-3 rounded-full shadow-lg">
-            <motion.span
-              animate={{ rotate: [0, 15, -15, 0] }}
-              transition={{ duration: 0.5, repeat: 2 }}
-              className="text-2xl"
-            >
-              ⭐
-            </motion.span>
-            <span className="text-xl font-bold">+{amount} XP</span>
+          <div className="flex items-center gap-3 bg-gradient-to-r from-amber-400 to-orange-500 text-white px-6 py-3 rounded-full shadow-lg">
+            <span className="text-[10px] font-bold uppercase tracking-[0.25em] opacity-80">
+              XP
+            </span>
+            <span className="text-xl font-bold">+{amount}</span>
           </div>
         </motion.div>
       )}
@@ -96,10 +92,8 @@ export function XpParticles({ count = 5, show }: { count?: number; show: boolean
               delay: particle.delay,
               ease: 'easeOut',
             }}
-            className="absolute text-2xl"
-          >
-            ✨
-          </motion.div>
+            className="absolute w-2 h-2 rounded-full bg-brand-accent"
+          />
         ))}
       </AnimatePresence>
     </div>

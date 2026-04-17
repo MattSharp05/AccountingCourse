@@ -110,17 +110,19 @@ export function HealthBar({
 
   if (showHearts) {
     return (
-      <div className={`flex gap-1 ${className}`}>
+      <div className={`flex gap-1.5 ${className}`}>
         {hearts.map((filled, i) => (
           <motion.span
             key={i}
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: i * 0.1 }}
-            className={`text-2xl ${filled ? '' : 'opacity-30'}`}
-          >
-            {filled ? '❤️' : '🖤'}
-          </motion.span>
+            className={`w-5 h-5 rounded-sm ${
+              filled
+                ? 'bg-error-500'
+                : 'bg-transparent border border-error-500/40'
+            }`}
+          />
         ))}
       </div>
     );

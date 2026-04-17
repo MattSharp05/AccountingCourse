@@ -105,63 +105,73 @@ function assignCategory(
   const r = rand();
 
   if (zone === 'pathCorridor') {
-    // Only small rocks and grass
-    if (r < 0.35) return 'rockSmall';
-    return 'grass';
+    if (r < 0.25) return 'rockSmall';
+    if (r < 0.50) return 'grass';
+    if (r < 0.75) return 'flower';
+    return 'mushroom';
   }
 
   if (zone === 'forestEdge') {
-    // Dense trees
-    if (r < 0.45) return 'tree';
-    if (r < 0.65) return 'bush';
-    if (r < 0.80) return 'rockSmall';
-    return 'grass';
+    if (r < 0.40) return 'tree';
+    if (r < 0.55) return 'bush';
+    if (r < 0.65) return 'mushroom';
+    if (r < 0.75) return 'rockSmall';
+    if (r < 0.85) return 'grass';
+    return 'flower';
   }
 
   // pathFlanking + openMeadow: use cluster influence
   if (clusterType === 'tree') {
-    if (r < 0.35) return 'tree';
-    if (r < 0.55) return 'bush';
+    if (r < 0.30) return 'tree';
+    if (r < 0.45) return 'bush';
+    if (r < 0.55) return 'mushroom';
     if (r < 0.70) return 'rockMedium';
     if (r < 0.85) return 'grass';
-    return 'rockSmall';
+    return 'flower';
   }
   if (clusterType === 'rock') {
-    if (r < 0.25) return 'rockLarge';
-    if (r < 0.50) return 'rockMedium';
-    if (r < 0.65) return 'rockSmall';
-    if (r < 0.85) return 'grass';
+    if (r < 0.20) return 'rockLarge';
+    if (r < 0.40) return 'rockMedium';
+    if (r < 0.55) return 'rockSmall';
+    if (r < 0.70) return 'grass';
+    if (r < 0.85) return 'flower';
     return 'bush';
   }
 
   // Default / mixed
   if (zone === 'pathFlanking') {
-    if (r < 0.20) return 'bush';
-    if (r < 0.35) return 'rockSmall';
-    if (r < 0.50) return 'tree';
-    return 'grass';
+    if (r < 0.15) return 'bush';
+    if (r < 0.30) return 'rockSmall';
+    if (r < 0.45) return 'flower';
+    if (r < 0.55) return 'grass';
+    if (r < 0.65) return 'mushroom';
+    return 'tree';
   }
 
   // openMeadow
-  if (r < 0.25) return 'tree';
-  if (r < 0.40) return 'bush';
-  if (r < 0.55) return 'rockMedium';
-  if (r < 0.70) return 'grass';
-  if (r < 0.85) return 'rockSmall';
+  if (r < 0.20) return 'tree';
+  if (r < 0.30) return 'bush';
+  if (r < 0.42) return 'flower';
+  if (r < 0.55) return 'grass';
+  if (r < 0.65) return 'rockMedium';
+  if (r < 0.75) return 'mushroom';
+  if (r < 0.88) return 'rockSmall';
   return 'rockLarge';
 }
 
 // Variant counts per category
 const VARIANT_COUNTS: Record<DecorationCategory, number> = {
-  tree: 6,
-  bush: 4,
-  rockLarge: 2,
-  rockMedium: 2,
+  tree: 10,
+  bush: 2,
+  rockLarge: 3,
+  rockMedium: 3,
   rockSmall: 2,
-  grass: 3,
+  grass: 4,
+  flower: 4,
+  mushroom: 2,
 };
 
-// Scale ranges per category
+// Scale ranges per category (applied on top of ASSET_BASE_SCALES)
 const SCALE_RANGES: Record<DecorationCategory, [number, number]> = {
   tree: [0.7, 1.3],
   bush: [0.6, 1.1],
@@ -169,7 +179,22 @@ const SCALE_RANGES: Record<DecorationCategory, [number, number]> = {
   rockMedium: [0.5, 1.0],
   rockSmall: [0.4, 0.8],
   grass: [0.6, 1.2],
+  flower: [0.5, 1.0],
+  mushroom: [0.6, 1.0],
 };
+
+// ── Density Gradient ────────────────────────────────────
+// Returns 0 at map center → 1 at map edge, using distance from the
+// center of the node bounding box (not the padded world bounds).
+
+function edgeFactor(
+  px: number, pz: number,
+  cx: number, cz: number,
+  boundary: number,
+): number {
+  const dist = Math.max(Math.abs(px - cx), Math.abs(pz - cz));
+  return Math.min(1, dist / boundary);
+}
 
 // ── Main Placement Function ─────────────────────────────
 
@@ -187,37 +212,47 @@ export function placeDecorations(
 
   const { minX, maxX, minZ, maxZ, size } = bounds;
   const boundary = size / 2;
+  const cx = (minX + maxX) / 2;
+  const cz = (minZ + maxZ) / 2;
 
   // 1. Generate cluster centers via coarse Poisson disk
   const clusterPoints = poissonDisk(minX + 4, maxX - 4, minZ + 4, maxZ - 4, preset.clusters.minDist, rand, preset.clusters.count * 3);
-  const clusters: Cluster[] = clusterPoints.slice(0, preset.clusters.count).map(([cx, cz]) => ({
-    x: cx,
-    z: cz,
+  const clusters: Cluster[] = clusterPoints.slice(0, preset.clusters.count).map(([ccx, ccz]) => ({
+    x: ccx,
+    z: ccz,
     radius: preset.clusters.radiusMin + rand() * (preset.clusters.radiusMax - preset.clusters.radiusMin),
     type: rand() < 0.7 ? 'tree' : rand() < 0.7 ? 'rock' : 'mixed',
   }));
 
-  // 2. Per-zone Poisson disk sampling
+  // 2. Multi-pass Poisson disk sampling at different densities
+  //    Denser passes fill in the outer regions; sparser pass covers interior.
   const allPoints: [number, number][] = [];
 
-  // Forest edge ring: boundary - 6 to boundary
-  const edgePoints = poissonDisk(
+  // Dense outer ring (tight spacing, lots of points)
+  const denseEdge = poissonDisk(
     minX, maxX, minZ, maxZ,
-    preset.zones.forestEdgeMinDist,
+    preset.zones.forestEdgeMinDist * 0.7,
     seededRandom(seed + 2000),
-    300,
+    800,
   );
-  for (const [px, pz] of edgePoints) {
-    const { nodeDist } = sampleGrid(distGrid, px, pz);
-    const cx = (minX + maxX) / 2;
-    const cz = (minZ + maxZ) / 2;
-    const edgeDist = boundary - Math.max(Math.abs(px - cx), Math.abs(pz - cz));
-    if (edgeDist >= 0 && edgeDist < 6 && nodeDist > 3.5) {
-      allPoints.push([px, pz]);
-    }
+  for (const [px, pz] of denseEdge) {
+    const ef = edgeFactor(px, pz, cx, cz, boundary);
+    if (ef > 0.55) allPoints.push([px, pz]);
   }
 
-  // Interior: flanking + meadow + corridor
+  // Medium density mid-ring
+  const midRing = poissonDisk(
+    minX + 2, maxX - 2, minZ + 2, maxZ - 2,
+    preset.zones.forestEdgeMinDist,
+    seededRandom(seed + 2500),
+    500,
+  );
+  for (const [px, pz] of midRing) {
+    const ef = edgeFactor(px, pz, cx, cz, boundary);
+    if (ef > 0.35 && ef <= 0.7) allPoints.push([px, pz]);
+  }
+
+  // Sparse interior (paths, meadows, near nodes)
   const interiorPoints = poissonDisk(
     minX + 3, maxX - 3, minZ + 3, maxZ - 3,
     preset.zones.meadowMinDist,
@@ -232,9 +267,8 @@ export function placeDecorations(
 
   for (const [px, pz] of allPoints) {
     const { pathDist, nodeDist } = sampleGrid(distGrid, px, pz);
-    const cx = (minX + maxX) / 2;
-    const cz = (minZ + maxZ) / 2;
     const edgeDist = boundary - Math.max(Math.abs(px - cx), Math.abs(pz - cz));
+    const ef = edgeFactor(px, pz, cx, cz, boundary);
 
     const zone = classifyZone(pathDist, nodeDist, edgeDist);
     if (zone === 'nodePad') continue;
@@ -250,18 +284,38 @@ export function placeDecorations(
       }
     }
 
-    // Acceptance probability based on cluster proximity
-    const acceptRate = nearCluster ? 1.0 : 0.6;
+    // Acceptance probability: increases toward edges for a "clearing in the
+    // woods" feel. Center of map ~40% acceptance, edges ~100%.
+    const baseAccept = nearCluster ? 1.0 : 0.6;
+    const edgeBoost = 0.4 + 0.6 * ef;
+    const acceptRate = Math.min(1.0, baseAccept * edgeBoost);
     if (rand2() > acceptRate) continue;
 
-    const category = assignCategory(zone, nearCluster?.type ?? null, rand2);
+    // Near the edges, bias heavily toward trees for a dense forest wall
+    let category: DecorationCategory | null;
+    if (ef > 0.7) {
+      const r = rand2();
+      if (r < 0.55) category = 'tree';
+      else if (r < 0.70) category = 'bush';
+      else if (r < 0.80) category = 'mushroom';
+      else if (r < 0.90) category = 'grass';
+      else category = 'rockSmall';
+    } else {
+      category = assignCategory(zone, nearCluster?.type ?? null, rand2);
+    }
     if (!category) continue;
 
-    // Don't place trees in pathCorridor (extra safety)
-    if (zone === 'pathCorridor' && (category === 'tree' || category === 'bush' || category === 'rockLarge' || category === 'rockMedium')) continue;
+    // Hard exclusion: keep bulky assets out of the corridor and flanking
+    if (zone === 'pathCorridor') {
+      if (category !== 'rockSmall' && category !== 'grass' && category !== 'flower' && category !== 'mushroom') continue;
+    } else if (zone === 'pathFlanking') {
+      if (category === 'tree' || category === 'rockLarge' || category === 'rockMedium') continue;
+    }
 
     const [scaleMin, scaleMax] = SCALE_RANGES[category];
-    const scale = scaleMin + rand2() * (scaleMax - scaleMin);
+    // Trees near the edge grow a bit larger for a denser canopy feel
+    const edgeScaleBoost = (category === 'tree' && ef > 0.5) ? 1.0 + 0.3 * ef : 1.0;
+    const scale = (scaleMin + rand2() * (scaleMax - scaleMin)) * edgeScaleBoost;
     const rotation = rand2() * Math.PI * 2;
     const variantIndex = Math.floor(rand2() * VARIANT_COUNTS[category]);
 

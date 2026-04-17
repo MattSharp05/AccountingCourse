@@ -40,7 +40,9 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="min-h-[200px] flex items-center justify-center p-8">
           <div className="text-center max-w-md">
-            <div className="text-6xl mb-4">😵</div>
+            <p className="text-xs font-bold uppercase tracking-[0.3em] text-error-600 mb-3">
+              Error
+            </p>
             <h2 className="text-xl font-bold text-gray-800 mb-2 font-display">
               Oops! Something went wrong
             </h2>
@@ -95,7 +97,9 @@ export class Canvas3DErrorBoundary extends Component<Props, State> {
       return (
         <div className="w-full h-full min-h-[400px] bg-game-bg flex items-center justify-center">
           <div className="text-center text-white p-8">
-            <div className="text-6xl mb-4">🎮</div>
+            <p className="text-xs font-bold uppercase tracking-[0.3em] text-brand-accent mb-3">
+              3D Error
+            </p>
             <h2 className="text-xl font-bold mb-2 font-display">
               3D Scene Error
             </h2>

@@ -1,19 +1,20 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import type { ContentItem, ContentItemType, QuizData } from '../types/admin';
-import { chapterKeys } from './useChapters';
+import { checkpointKeys } from './useCheckpoints';
 
 export const contentItemKeys = {
   forMap: (mapId: string) => ['contentItems', { mapId }] as const,
+  forCheckpoint: (checkpointId: string) => ['contentItems', { checkpointId }] as const,
 };
 
 function rowToContentItem(row: Record<string, unknown>): ContentItem {
   return {
     id: row.id as string,
-    chapterId: row.chapter_id as string,
+    checkpointId: row.checkpoint_id as string,
     type: row.type as ContentItemType,
     title: row.title as string,
-    description: row.description as string,
+    description: (row.description as string) ?? '',
     fileUrl: (row.file_url as string) ?? undefined,
     textContent: (row.text_content as string) ?? undefined,
     quizData: (row.quiz_data as QuizData) ?? undefined,
@@ -23,11 +24,12 @@ function rowToContentItem(row: Record<string, unknown>): ContentItem {
   };
 }
 
+/** Fetch all content items for a map (through checkpoints → chapters) */
 export function useContentItemsForMap(mapId: string) {
   return useQuery({
     queryKey: contentItemKeys.forMap(mapId),
     queryFn: async () => {
-      // Get chapter IDs for this map
+      // chapters → checkpoints → content_items
       const { data: chapters, error: chErr } = await supabase
         .from('chapters')
         .select('id')
@@ -37,10 +39,19 @@ export function useContentItemsForMap(mapId: string) {
       const chapterIds = (chapters as any[]).map((c) => c.id);
       if (chapterIds.length === 0) return [];
 
+      const { data: checkpoints, error: cpErr } = await supabase
+        .from('checkpoints')
+        .select('id')
+        .in('chapter_id', chapterIds);
+      if (cpErr) throw cpErr;
+
+      const checkpointIds = (checkpoints as any[]).map((cp) => cp.id);
+      if (checkpointIds.length === 0) return [];
+
       const { data, error } = await supabase
         .from('content_items')
         .select('*')
-        .in('chapter_id', chapterIds)
+        .in('checkpoint_id', checkpointIds)
         .order('order', { ascending: true });
       if (error) throw error;
       return (data as any[]).map(rowToContentItem);
@@ -49,31 +60,63 @@ export function useContentItemsForMap(mapId: string) {
   });
 }
 
+/** Fetch content items for a single checkpoint */
+export function useContentItemsForCheckpoint(checkpointId: string) {
+  return useQuery({
+    queryKey: contentItemKeys.forCheckpoint(checkpointId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('content_items')
+        .select('*')
+        .eq('checkpoint_id', checkpointId)
+        .order('order', { ascending: true });
+      if (error) throw error;
+      return (data as any[]).map(rowToContentItem);
+    },
+    enabled: !!checkpointId,
+  });
+}
+
 export function useAddContentItem() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ chapterId, type, title }: { chapterId: string; type: ContentItemType; title: string; mapId: string }) => {
+    mutationFn: async ({ checkpointId, type, title, quizData }: {
+      checkpointId: string;
+      type: ContentItemType;
+      title: string;
+      mapId: string;
+      quizData?: QuizData;
+    }) => {
       const { count } = await supabase
         .from('content_items')
         .select('*', { count: 'exact', head: true })
-        .eq('chapter_id', chapterId);
+        .eq('checkpoint_id', checkpointId);
 
-      console.log('[addContentItem] Inserting:', { chapterId, type, title, order: (count ?? 0) + 1 });
-      const { data, error } = await supabase
-        .from('content_items')
-        .insert({ chapter_id: chapterId, type, title, order: (count ?? 0) + 1 } as any)
+      const insertData: Record<string, unknown> = {
+        checkpoint_id: checkpointId,
+        type,
+        title,
+        order: (count ?? 0) + 1,
+      };
+      if (quizData) insertData.quiz_data = quizData;
+
+      console.log('[addContentItem] Inserting:', { checkpointId, type, title, hasQuizData: !!quizData });
+      const { data, error } = await (supabase
+        .from('content_items') as any)
+        .insert(insertData)
         .select()
         .single();
       if (error) {
         console.error('[addContentItem] DB error:', error);
         throw error;
       }
-      console.log('[addContentItem] Created:', (data as any).id);
-      return rowToContentItem(data as any);
+      console.log('[addContentItem] Created:', data.id);
+      return rowToContentItem(data);
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: contentItemKeys.forMap(variables.mapId) });
-      queryClient.invalidateQueries({ queryKey: chapterKeys.forMap(variables.mapId) });
+      queryClient.invalidateQueries({ queryKey: contentItemKeys.forCheckpoint(variables.checkpointId) });
+      queryClient.invalidateQueries({ queryKey: checkpointKeys.forMap(variables.mapId) });
     },
   });
 }

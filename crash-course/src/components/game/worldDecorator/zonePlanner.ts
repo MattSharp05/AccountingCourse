@@ -102,10 +102,15 @@ export function classifyZone(
   boundaryDist: number,
 ): Zone {
   // Priority order: nodePad > pathCorridor > pathFlanking > forestEdge > openMeadow
+  //
+  // Corridor (no trees / no medium or large rocks): 0–4.0u from the road
+  // centerline. Flanking (small stuff only): 4.0–7.5u. Beyond that, the
+  // open meadow can host anything. The wider corridor + flanking bands
+  // emphasize the road by keeping bulky assets visually clear of it.
   if (nodeDist < 3.5) return 'nodePad';
-  if (pathDist < 2.5) return 'pathCorridor';
-  if (pathDist < 5.0) return 'pathFlanking';
-  if (boundaryDist < 6.0) return 'forestEdge';
+  if (pathDist < 4.0) return 'pathCorridor';
+  if (pathDist < 7.5) return 'pathFlanking';
+  if (boundaryDist < 12.0) return 'forestEdge';
   return 'openMeadow';
 }
 
@@ -122,7 +127,10 @@ export function computeWorldBounds(nodes: ContentNode[]) {
   // Fallback for empty / 1-node maps
   if (!isFinite(minX)) { minX = -10; maxX = 10; minZ = -10; maxZ = 10; }
 
-  const pad = 16;
+  // Outdoor padding around the node bounding box. Bumped from 16 to 24
+  // so the map "reaches further" past the outermost nodes — gives more
+  // forest, meadow, and breathing room before the mountain ring.
+  const pad = 24;
   minX -= pad;
   maxX += pad;
   minZ -= pad;

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { GraduationCap, Shield } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
+import { BrandButton, FadeIn } from '../../components/ui';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -15,7 +16,6 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Redirect if already authenticated
   if (isAuthenticated) {
     navigate('/admin', { replace: true });
     return null;
@@ -40,25 +40,31 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 via-white to-secondary-50 px-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-sm"
-      >
+    <div className="min-h-screen flex items-center justify-center bg-brand-dark text-white px-4 py-16">
+      <FadeIn y={16} className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold font-display text-gray-900 mb-2">
-            Crash Course
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand-accent to-brand-accent-dark flex items-center justify-center mx-auto mb-5">
+            <GraduationCap className="w-6 h-6 text-brand-dark" />
+          </div>
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-brand-accent mb-2 flex items-center justify-center gap-1.5">
+            <Shield className="w-3 h-3" />
+            Instructor portal
+          </p>
+          <h1 className="font-display text-3xl font-bold text-white tracking-tight">
+            {mode === 'login' ? 'Welcome back' : 'Create your account'}
           </h1>
-          <p className="text-gray-500 text-sm">
-            {mode === 'login' ? 'Sign in to your account' : 'Create a new account'}
+          <p className="text-sm text-[#9ca3af] mt-2">
+            {mode === 'login' ? 'Sign in to manage your courses.' : 'Start building your course today.'}
           </p>
         </div>
 
-        <div className="bg-white rounded-game-lg shadow-game border border-gray-100 p-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="bg-brand-dark-card border border-white/10 rounded-2xl shadow-2xl shadow-black/40 p-7">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+              <label
+                htmlFor="email"
+                className="block text-xs font-semibold uppercase tracking-[0.15em] text-[#9ca3af] mb-2"
+              >
                 Email
               </label>
               <input
@@ -68,13 +74,16 @@ export function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 autoFocus
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-game text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-primary-400 transition-colors"
+                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-brand-accent/50 focus:border-brand-accent/50 transition-colors"
                 placeholder="professor@university.edu"
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+              <label
+                htmlFor="password"
+                className="block text-xs font-semibold uppercase tracking-[0.15em] text-[#9ca3af] mb-2"
+              >
                 Password
               </label>
               <input
@@ -84,40 +93,39 @@ export function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-game text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-primary-400 transition-colors"
+                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-brand-accent/50 focus:border-brand-accent/50 transition-colors"
                 placeholder="Min. 6 characters"
               />
             </div>
 
             {error && (
-              <motion.p
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-sm text-error-600 bg-error-50 px-3 py-2 rounded-game"
-              >
+              <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 px-4 py-3 rounded-xl">
                 {error}
-              </motion.p>
+              </p>
             )}
 
-            <button
+            <BrandButton
               type="submit"
-              disabled={loading}
-              className="w-full py-2.5 bg-primary-600 text-white font-semibold font-display rounded-game shadow-game hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              variant="primary"
+              size="lg"
+              isLoading={loading}
+              fullWidth
+              className="mt-2"
             >
-              {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Sign Up'}
-            </button>
+              {loading ? 'Please wait...' : mode === 'login' ? 'Sign in' : 'Sign up'}
+            </BrandButton>
           </form>
 
-          <div className="mt-4 text-center">
+          <div className="mt-6 text-center">
             <button
               onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); }}
-              className="text-sm text-primary-600 hover:text-primary-700 font-medium transition-colors"
+              className="text-sm text-brand-accent font-medium hover:text-brand-accent-light transition-colors"
             >
               {mode === 'login' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
             </button>
           </div>
         </div>
-      </motion.div>
+      </FadeIn>
     </div>
   );
 }

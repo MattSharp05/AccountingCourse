@@ -1,32 +1,66 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-// Financial tutor system prompt
-const SYSTEM_PROMPT = `You are a friendly and encouraging financial statements tutor for beginners. Your name is Professor Penny.
+// Accounting tutor system prompt
+const SYSTEM_PROMPT = `You are Professor Marrs, a friendly and encouraging accounting tutor for college students taking Intro to Accounting.
 
-Your role:
-- Help students understand financial statements (balance sheet, income statement, cash flow statement)
-- Explain accounting concepts in simple, relatable terms
-- Use real-world examples when possible
-- Encourage students and celebrate their progress
-- Keep responses concise but educational
+Your scope covers the full introductory accounting curriculum:
+- The accounting equation (Assets = Liabilities + Equity)
+- Double-entry bookkeeping, journal entries, T-accounts
+- The accounting cycle (trial balance, adjusting entries, closing entries)
+- Financial statements (income statement, balance sheet, statement of cash flows, statement of owner's equity)
+- Merchandising operations, inventory methods (FIFO, LIFO, weighted average)
+- Internal controls, bank reconciliation
+- Receivables, bad debt estimation (allowance method, direct write-off)
+- Long-lived assets, depreciation methods (straight-line, declining balance, units-of-production)
+- Current and long-term liabilities
+- Payroll accounting
+- Partnership and corporate accounting basics
+- Financial ratios and analysis
 
 Guidelines:
-- Use analogies to explain complex concepts
+- Use analogies and real-world examples to explain concepts
 - Break down jargon into plain English
-- Stay focused on financial statements topics
-- Be patient and supportive with beginners`;
+- Keep responses concise (2-4 paragraphs max) unless the student asks for more detail
+- Show worked examples with numbers when explaining calculations
+- Encourage students and celebrate their progress
+- If asked about topics outside accounting, gently redirect
+- If given course content context below, reference it directly and tie your explanations to what the professor has taught
+
+{{COURSE_CONTEXT}}`;
 
 // Fallback responses when API is unavailable
 const FALLBACK_RESPONSES = [
-  "I'm having trouble connecting right now, but let me share a tip: The balance sheet shows what a company owns (assets), owes (liabilities), and the owner's stake (equity). Assets = Liabilities + Equity! 📊",
-  "Connection issue! Here's a quick lesson: Revenue is the 'top line' of an income statement - it's money earned from selling products or services. Net income is the 'bottom line' - what's left after all expenses! 💰",
-  "I can't connect to my brain right now! But remember: Cash flow is king! A company can show profit but still run out of cash if customers don't pay on time. 🏦",
-  "Having technical difficulties! Fun fact: The three financial statements are interconnected - they tell a complete story about a company's financial health! 🔗",
+  "I'm having trouble connecting right now, but here's a tip: The accounting equation is Assets = Liabilities + Equity. Every transaction affects at least two accounts — that's double-entry bookkeeping!",
+  "Connection issue! Quick lesson: Debits increase assets and expenses, credits increase liabilities, equity, and revenue. Remember: debits on the left, credits on the right!",
+  "I can't connect right now! But remember: The accounting cycle goes from journal entries → ledger → trial balance → adjusting entries → financial statements → closing entries.",
+  "Having technical difficulties! Fun fact: The three main financial statements (income statement, balance sheet, cash flow statement) are all interconnected — net income flows to retained earnings on the balance sheet!",
 ];
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
+}
+
+function buildSystemPrompt(context: Record<string, unknown>): string {
+  let contextSection = '';
+
+  if (context.mapTitle) {
+    contextSection += `\nThe student is currently on: "${context.mapTitle}"`;
+  }
+  if (context.checkpointTitle) {
+    contextSection += ` > checkpoint: "${context.checkpointTitle}"`;
+  }
+  if (Array.isArray(context.strugglingTopics) && context.strugglingTopics.length > 0) {
+    contextSection += `\nTopics they're struggling with: ${context.strugglingTopics.join(', ')}`;
+  }
+  if (typeof context.courseContent === 'string' && context.courseContent.length > 0) {
+    contextSection += `\n\nHere is the professor's course content for this section. Reference it in your answers when relevant:\n\n${context.courseContent}`;
+  }
+
+  return SYSTEM_PROMPT.replace(
+    '{{COURSE_CONTEXT}}',
+    contextSection || '\nNo specific course content loaded for the current section.'
+  );
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -44,9 +78,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { message, history = [] } = req.body as {
+    const { message, history = [], context = {} } = req.body as {
       message: string;
       history?: ChatMessage[];
+      context?: Record<string, unknown>;
     };
 
     // Input validation
@@ -79,9 +114,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // Build system prompt with course context
+    const systemPrompt = buildSystemPrompt(context);
+
     // Build messages array
     const messages: ChatMessage[] = [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: systemPrompt },
       ...history.slice(-10),
       { role: 'user', content: message },
     ];
@@ -96,7 +134,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: JSON.stringify({
         model: 'gpt-3.5-turbo',
         messages,
-        max_tokens: 500,
+        max_tokens: 800,
         temperature: 0.7,
       }),
     });

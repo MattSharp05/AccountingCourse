@@ -1,6 +1,7 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from './components/ui';
+import { Landing } from './pages/Landing';
 import { Home } from './pages/Home';
 import { GameMap } from './pages/GameMap';
 import { StudentLogin } from './pages/StudentLogin';
@@ -21,13 +22,15 @@ const queryClient = new QueryClient({
 });
 
 const router = createBrowserRouter([
+  // Public marketing landing
+  { path: '/', element: <Landing /> },
+
   // Student auth
   { path: '/login', element: <StudentLogin /> },
 
   // Student routes (protected)
-  { path: '/', element: <StudentAuthGuard><Home /></StudentAuthGuard> },
+  { path: '/home', element: <StudentAuthGuard><Home /></StudentAuthGuard> },
   { path: '/course/:courseId', element: <StudentAuthGuard><StudentCourseDetail /></StudentAuthGuard> },
-  { path: '/game', element: <StudentAuthGuard><GameMap /></StudentAuthGuard> },
   { path: '/game/map/:mapId', element: <StudentAuthGuard><GameMap /></StudentAuthGuard> },
 
   // Admin routes

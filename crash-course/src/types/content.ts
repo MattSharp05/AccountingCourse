@@ -63,6 +63,15 @@ export interface ChatMessage {
   timestamp: string;
 }
 
+export interface ChatContext {
+  module?: number;
+  mapId?: string;
+  mapTitle?: string;
+  checkpointId?: string;
+  checkpointTitle?: string;
+  topic?: string | null;
+}
+
 export interface ChatState {
   messages: ChatMessage[];
   isLoading: boolean;
@@ -72,12 +81,16 @@ export interface ChatState {
   // Context for AI
   currentModule: number;
   currentTopic: string | null;
+  currentMapId: string | null;
+  currentMapTitle: string | null;
+  currentCheckpointId: string | null;
+  currentCheckpointTitle: string | null;
   strugglingTopics: string[];
 
   // Actions
-  sendMessage: (content: string) => Promise<void>;
+  sendMessage: (content: string, courseContent?: string) => Promise<void>;
   toggleChat: () => void;
   clearChat: () => void;
-  setContext: (module: number, topic: string | null) => void;
+  setContext: (context: ChatContext) => void;
   addStrugglingTopic: (topic: string) => void;
 }

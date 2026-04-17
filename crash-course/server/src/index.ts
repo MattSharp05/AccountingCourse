@@ -31,6 +31,6 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`🚀 Crash Course API running on http://localhost:${PORT}`);
-  console.log(`📚 Chat endpoint: http://localhost:${PORT}/api/chat`);
+  console.log(`Crash Course API running on http://localhost:${PORT}`);
+  console.log(`Chat endpoint: http://localhost:${PORT}/api/chat`);
 });

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Button, ProgressBar } from '../ui';
+import { Play, Pause, Check, Film } from 'lucide-react';
+import { BrandButton, ProgressBar } from '../ui';
 
 interface VideoPlayerProps {
   videoUrl?: string;
@@ -74,7 +75,9 @@ export function VideoPlayer({
 
     const rect = e.currentTarget.getBoundingClientRect();
     const percent = (e.clientX - rect.left) / rect.width;
-    video.currentTime = percent * video.duration;
+    if (isFinite(video.duration)) {
+      video.currentTime = percent * video.duration;
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -87,32 +90,26 @@ export function VideoPlayer({
   if (!videoUrl) {
     return (
       <div className="space-y-4">
-        <div className="aspect-video bg-gradient-to-br from-primary-100 to-primary-200 rounded-xl flex items-center justify-center relative overflow-hidden">
-          {/* Decorative background */}
-          <div className="absolute inset-0 opacity-10">
-            <div className="absolute top-4 left-4 text-6xl">📚</div>
-            <div className="absolute bottom-4 right-4 text-6xl">🎓</div>
-          </div>
-
-          <div className="text-center z-10">
+        <div className="aspect-video bg-brand-dark-lighter border border-white/10 rounded-2xl flex items-center justify-center relative overflow-hidden">
+          <div className="text-center z-10 px-6">
             <motion.div
-              className="text-6xl mb-4"
+              className="mb-4 flex justify-center"
               animate={{ scale: [1, 1.1, 1] }}
               transition={{ duration: 2, repeat: Infinity }}
             >
-              🎬
+              <Film className="w-14 h-14 text-brand-accent" />
             </motion.div>
-            <h3 className="text-xl font-bold text-primary-800 mb-2">{title}</h3>
-            <p className="text-primary-600 mb-4">Video content coming soon!</p>
-            <p className="text-sm text-primary-500">
+            <h3 className="text-xl font-bold text-white mb-2">{title}</h3>
+            <p className="text-[#9ca3af] mb-4">Video content coming soon</p>
+            <p className="text-sm text-[#6b7280]">
               This placeholder demonstrates the video player interface.
             </p>
           </div>
         </div>
 
         {/* Simulated progress bar */}
-        <div className="bg-gray-100 rounded-lg p-4">
-          <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
+        <div className="bg-brand-dark-lighter border border-white/10 rounded-xl p-4">
+          <div className="flex items-center justify-between text-sm text-[#9ca3af] mb-2">
             <span>0:00</span>
             <span>~5:00 (estimated)</span>
           </div>
@@ -120,9 +117,9 @@ export function VideoPlayer({
         </div>
 
         <div className="flex justify-end">
-          <Button onClick={onComplete} variant="primary">
-            Mark as Watched ✓
-          </Button>
+          <BrandButton onClick={onComplete} variant="primary">
+            Mark as Watched
+          </BrandButton>
         </div>
       </div>
     );
@@ -131,18 +128,19 @@ export function VideoPlayer({
   return (
     <div className="space-y-4">
       {/* Video container */}
-      <div className="relative aspect-video bg-black rounded-xl overflow-hidden group">
+      <div className="relative aspect-video bg-black rounded-2xl overflow-hidden group border border-white/10">
         <video
           ref={videoRef}
           src={videoUrl}
           poster={thumbnailUrl}
+          crossOrigin="anonymous"
           className="w-full h-full object-contain"
           onClick={togglePlay}
         />
 
         {/* Play/Pause overlay */}
         <motion.div
-          className="absolute inset-0 flex items-center justify-center bg-black/30 cursor-pointer"
+          className="absolute inset-0 flex items-center justify-center bg-black/40 cursor-pointer"
           initial={{ opacity: 0 }}
           animate={{ opacity: isPlaying ? 0 : 1 }}
           whileHover={{ opacity: 1 }}
@@ -151,29 +149,31 @@ export function VideoPlayer({
           <motion.button
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
-            className="w-20 h-20 rounded-full bg-white/90 flex items-center justify-center shadow-lg"
+            className="w-20 h-20 rounded-full bg-brand-accent text-brand-dark flex items-center justify-center shadow-lg"
           >
-            <span className="text-3xl ml-1">
-              {isPlaying ? '⏸️' : '▶️'}
-            </span>
+            {isPlaying ? (
+              <Pause className="w-8 h-8" />
+            ) : (
+              <Play className="w-8 h-8 ml-1" />
+            )}
           </motion.button>
         </motion.div>
       </div>
 
       {/* Controls */}
-      <div className="bg-gray-100 rounded-lg p-4">
-        <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
+      <div className="bg-brand-dark-lighter border border-white/10 rounded-xl p-4">
+        <div className="flex items-center justify-between text-sm text-[#9ca3af] mb-2">
           <span>{formatTime(videoRef.current?.currentTime || 0)}</span>
           <span>{formatTime(duration)}</span>
         </div>
 
         {/* Progress bar (clickable) */}
         <div
-          className="h-3 bg-gray-300 rounded-full cursor-pointer overflow-hidden"
+          className="h-3 bg-white/5 rounded-full cursor-pointer overflow-hidden"
           onClick={handleSeek}
         >
           <motion.div
-            className="h-full bg-gradient-to-r from-primary-500 to-primary-600 rounded-full"
+            className="h-full bg-brand-accent rounded-full"
             style={{ width: `${progress}%` }}
           />
         </div>
@@ -181,14 +181,22 @@ export function VideoPlayer({
         {/* Control buttons */}
         <div className="flex items-center justify-between mt-3">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={togglePlay}>
-              {isPlaying ? '⏸️ Pause' : '▶️ Play'}
-            </Button>
+            <BrandButton variant="ghost" size="sm" onClick={togglePlay}>
+              {isPlaying ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <Pause className="w-4 h-4" /> Pause
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5">
+                  <Play className="w-4 h-4" /> Play
+                </span>
+              )}
+            </BrandButton>
           </div>
 
           {hasWatched && (
-            <span className="text-accent-600 font-medium">
-              ✓ Video watched
+            <span className="inline-flex items-center gap-1.5 text-brand-accent font-medium">
+              <Check className="w-4 h-4" /> Video watched
             </span>
           )}
         </div>
@@ -196,13 +204,13 @@ export function VideoPlayer({
 
       {/* Complete button */}
       <div className="flex justify-end">
-        <Button
+        <BrandButton
           onClick={onComplete}
           variant="primary"
           disabled={!hasWatched && !!videoUrl}
         >
-          {hasWatched ? 'Complete & Continue →' : 'Watch to continue'}
-        </Button>
+          {hasWatched ? 'Complete & Continue' : 'Watch to continue'}
+        </BrandButton>
       </div>
     </div>
   );

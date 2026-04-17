@@ -68,7 +68,7 @@ export function Modal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             onClick={handleOverlayClick}
           />
 
@@ -80,23 +80,23 @@ export function Modal({
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             className={`
               relative w-full ${sizeStyles[size]}
-              bg-white rounded-game-lg shadow-2xl
-              overflow-hidden
+              bg-brand-dark-card border border-white/10 rounded-2xl shadow-2xl shadow-black/60
+              overflow-hidden text-white
             `}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             {(title || showCloseButton) && (
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
                 {title && (
-                  <h2 className="text-xl font-bold text-gray-900 font-display">
+                  <h2 className="text-lg font-bold text-white tracking-tight">
                     {title}
                   </h2>
                 )}
                 {showCloseButton && (
                   <button
                     onClick={onClose}
-                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                    className="p-2 text-[#6b7280] hover:text-white hover:bg-white/5 rounded-full transition-colors"
                     aria-label="Close modal"
                   >
                     <CloseIcon />

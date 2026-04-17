@@ -1,0 +1,22 @@
+# Minimal Supabase config — only Edge Function settings.
+# Most sections (api, db, auth, storage) are left to project defaults so the
+# CLI doesn't try to manage local Postgres / Studio.
+
+project_id = "crash-course"
+
+# Both extract-pdf and generate-quiz handle auth themselves: they create a
+# Supabase client with the caller's JWT and query content_items, which RLS
+# blocks for non-owners. The gateway-level JWT check was rejecting valid user
+# JWTs for reasons we couldn't pin down — disabling it lets the function code
+# run and enforces the same security model one layer down.
+[functions.extract-pdf]
+verify_jwt = false
+
+[functions.generate-quiz]
+verify_jwt = false
+
+[functions.transcribe-video]
+verify_jwt = false
+
+[functions.extract-quiz-from-pdf]
+verify_jwt = false

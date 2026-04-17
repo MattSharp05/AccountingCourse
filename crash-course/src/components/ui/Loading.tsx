@@ -51,14 +51,13 @@ export function Loading({ size = 'md', text, fullScreen = false }: LoadingProps)
 export function GameLoading({ message = 'Loading...' }: { message?: string }) {
   return (
     <div className="w-full h-full min-h-[400px] bg-game-bg flex flex-col items-center justify-center gap-6">
-      {/* Bouncing books animation */}
-      <div className="flex gap-2">
-        {['📕', '📗', '📘', '📙'].map((book, i) => (
+      {/* Bouncing dots animation */}
+      <div className="flex gap-3">
+        {[0, 1, 2, 3].map((i) => (
           <motion.span
             key={i}
-            className="text-4xl"
             animate={{
-              y: [0, -20, 0],
+              y: [0, -16, 0],
             }}
             transition={{
               duration: 0.6,
@@ -66,9 +65,8 @@ export function GameLoading({ message = 'Loading...' }: { message?: string }) {
               delay: i * 0.15,
               ease: 'easeInOut',
             }}
-          >
-            {book}
-          </motion.span>
+            className="w-3 h-3 rounded-full bg-brand-accent"
+          />
         ))}
       </div>
 

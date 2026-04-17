@@ -7,13 +7,18 @@ const STORAGE_KEY = 'crash-course-progress';
 
 const defaultPlayerProgress: PlayerProgress = {
   currentModule: 1,
-  completedNodes: [],
+  completedNodes: {},
   xp: 0,
   level: 1,
   badges: [],
   streak: 0,
   lastPlayedAt: null,
 };
+
+/** Stable empty array so the per-map selector returns the same reference
+ * when a map has no completions yet — otherwise React would re-render on
+ * every state change because `[] !== []`. */
+const EMPTY_COMPLETED: string[] = [];
 
 const defaultAvatarState: AvatarState = {
   position: [0, 0, 0],
@@ -49,19 +54,27 @@ export const useGameStore = create<GameState>()(
       set({ isContentOpen: false, currentNodeId: null });
     },
 
-    completeNode: (nodeId) => {
+    completeNode: (mapId, nodeId) => {
       const { playerProgress } = get();
-      if (playerProgress.completedNodes.includes(nodeId)) {
-        console.log('[gameStore] Node already completed:', nodeId);
+      const current = playerProgress.completedNodes[mapId] ?? [];
+      if (current.includes(nodeId)) {
+        console.log('[gameStore] Node already completed:', nodeId, 'in map:', mapId);
         return;
       }
 
-      const newCompleted = [...playerProgress.completedNodes, nodeId];
-      console.log('[gameStore] Completing node:', nodeId, 'Total completed:', newCompleted.length);
+      const next = [...current, nodeId];
+      console.log(
+        '[gameStore] Completing node:', JSON.stringify(nodeId),
+        'in map:', JSON.stringify(mapId),
+        'Map completedNodes after:', JSON.stringify(next),
+      );
       set({
         playerProgress: {
           ...playerProgress,
-          completedNodes: newCompleted,
+          completedNodes: {
+            ...playerProgress.completedNodes,
+            [mapId]: next,
+          },
         },
       });
       get().saveProgress();
@@ -128,16 +141,48 @@ export const useGameStore = create<GameState>()(
     loadProgress: () => {
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          const data = JSON.parse(saved);
-          set({
-            playerProgress: {
-              ...defaultPlayerProgress,
-              ...data.playerProgress,
-            },
-            currentModule: data.currentModule || 1,
-          });
+        if (!saved) return;
+
+        const data = JSON.parse(saved);
+        const rawProgress = (data.playerProgress ?? {}) as Partial<PlayerProgress> & {
+          completedNodes?: unknown;
+        };
+
+        // Migration: previously `completedNodes` was a flat `string[]`
+        // shared across all maps. That polluted unlock checks with stale
+        // IDs from other maps and from the legacy hardcoded module 1.
+        // Drop any non-object value here — the user loses old completion
+        // state, but it was already broken (cross-map ID collisions),
+        // and the new shape is `Record<mapId, string[]>`.
+        let completedNodes: Record<string, string[]> = {};
+        if (
+          rawProgress.completedNodes &&
+          typeof rawProgress.completedNodes === 'object' &&
+          !Array.isArray(rawProgress.completedNodes)
+        ) {
+          // Already in the new shape — copy over, validating each entry.
+          for (const [mapId, ids] of Object.entries(rawProgress.completedNodes)) {
+            if (Array.isArray(ids) && ids.every((x) => typeof x === 'string')) {
+              completedNodes[mapId] = ids;
+            }
+          }
+        } else if (Array.isArray(rawProgress.completedNodes)) {
+          console.log(
+            '[gameStore] Migrating legacy flat completedNodes array — dropping',
+            rawProgress.completedNodes.length,
+            'unscoped IDs (cross-map pollution).',
+          );
+          // Intentionally drop. completedNodes stays {}.
         }
+
+        set({
+          playerProgress: {
+            ...defaultPlayerProgress,
+            ...rawProgress,
+            completedNodes,
+          },
+          currentModule: data.currentModule || 1,
+        });
       } catch (e) {
         console.error('Failed to load progress:', e);
       }
@@ -162,5 +207,6 @@ export const useCurrentNode = () => useGameStore((s) => s.currentNodeId);
 export const useIsContentOpen = () => useGameStore((s) => s.isContentOpen);
 export const usePlayerXp = () => useGameStore((s) => s.playerProgress.xp);
 export const usePlayerLevel = () => useGameStore((s) => s.playerProgress.level);
-export const useCompletedNodes = () => useGameStore((s) => s.playerProgress.completedNodes);
+export const useCompletedNodes = (mapId: string): string[] =>
+  useGameStore((s) => s.playerProgress.completedNodes[mapId] ?? EMPTY_COMPLETED);
 export const useAvatarPosition = () => useGameStore((s) => s.avatarState.position);

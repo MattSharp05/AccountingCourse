@@ -6,7 +6,7 @@ export type Zone = 'nodePad' | 'pathCorridor' | 'pathFlanking' | 'openMeadow' | 
 
 // ── Decoration Types ────────────────────────────────────
 
-export type DecorationCategory = 'tree' | 'bush' | 'rockLarge' | 'rockMedium' | 'rockSmall' | 'grass';
+export type DecorationCategory = 'tree' | 'bush' | 'rockLarge' | 'rockMedium' | 'rockSmall' | 'grass' | 'flower' | 'mushroom';
 
 export interface DecorationInstance {
   x: number;

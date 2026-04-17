@@ -1,4 +1,4 @@
-import { useRef, useState, Suspense } from 'react';
+import { useRef, useState, useEffect, useCallback, Suspense } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useKeyboardControls } from '@react-three/drei';
 import { CapsuleCollider, RigidBody, type RapierRigidBody } from '@react-three/rapier';
@@ -19,9 +19,33 @@ interface AvatarProps {
 export function Avatar({ nodes, onNodeProximity, spawnPosition = [0, 2, 0], heightFn }: AvatarProps) {
   const rigidBodyRef = useRef<RapierRigidBody>(null);
   const meshRef = useRef<THREE.Group>(null);
-  const [animation, setAnimation] = useState<'idle' | 'walk' | 'run'>('idle');
+  const [animation, setAnimation] = useState<'idle' | 'walk' | 'run' | 'dance'>('idle');
+  const [isDancing, setIsDancing] = useState(false);
+  const danceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { updateAvatarPosition, updateAvatarAnimation, teleportTarget, clearTeleportTarget } = useGameStore();
+
+  const startDance = useCallback(() => {
+    if (danceTimerRef.current) clearTimeout(danceTimerRef.current);
+    setIsDancing(true);
+    setAnimation('dance');
+    updateAvatarAnimation('dance');
+    danceTimerRef.current = setTimeout(() => {
+      setIsDancing(false);
+      danceTimerRef.current = null;
+    }, 4000);
+  }, [updateAvatarAnimation]);
+
+  useEffect(() => {
+    const unsub = useGameStore.subscribe(
+      (s) => s.playerProgress.completedNodes,
+      () => startDance(),
+    );
+    return () => {
+      unsub();
+      if (danceTimerRef.current) clearTimeout(danceTimerRef.current);
+    };
+  }, [startDance]);
 
   // Keyboard controls
   const [, getKeys] = useKeyboardControls();
@@ -82,6 +106,33 @@ export function Avatar({ nodes, onNodeProximity, spawnPosition = [0, 2, 0], heig
     // Get current position
     const translation = rigidBodyRef.current.translation();
     const currentPosition = new THREE.Vector3(translation.x, translation.y, translation.z);
+
+    // During dance, ignore movement input
+    if (isDancing) {
+      rigidBodyRef.current.setLinvel(
+        { x: 0, y: rigidBodyRef.current.linvel().y, z: 0 },
+        true
+      );
+      // still do terrain following + position updates below
+      if (heightFn) {
+        const terrainY = heightFn(currentPosition.x, currentPosition.z);
+        const targetY = terrainY + 0.65;
+        if (currentPosition.y < targetY + 0.1) {
+          rigidBodyRef.current.setTranslation(
+            { x: currentPosition.x, y: targetY, z: currentPosition.z },
+            true,
+          );
+          const vel = rigidBodyRef.current.linvel();
+          if (vel.y < 0) {
+            rigidBodyRef.current.setLinvel({ x: vel.x, y: 0, z: vel.z }, true);
+          }
+        }
+      }
+      const finalPos = rigidBodyRef.current.translation();
+      updateAvatarPosition([finalPos.x, finalPos.y, finalPos.z]);
+      rigidBodyRef.current.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      return;
+    }
 
     // Update animation state
     const newAnimation = isMoving ? (run ? 'run' : 'walk') : 'idle';
@@ -176,7 +227,7 @@ export function Avatar({ nodes, onNodeProximity, spawnPosition = [0, 2, 0], heig
 }
 
 // Simple stylized student character
-function StudentCharacter({ animation }: { animation: 'idle' | 'walk' | 'run' }) {
+function StudentCharacter({ animation }: { animation: 'idle' | 'walk' | 'run' | 'dance' }) {
   const bodyRef = useRef<THREE.Group>(null);
   const leftLegRef = useRef<THREE.Mesh>(null);
   const rightLegRef = useRef<THREE.Mesh>(null);

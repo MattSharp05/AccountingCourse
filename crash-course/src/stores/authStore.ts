@@ -53,10 +53,18 @@ export const useAuthStore = create<AuthState>()((set) => ({
       set({ isLoading: false });
     }
 
-    supabase.auth.onAuthStateChange(async (_event, session) => {
+    supabase.auth.onAuthStateChange((_event, session) => {
+      // IMPORTANT: this callback runs while supabase-js holds the GoTrue auth
+      // lock. Awaiting any Supabase call here (incl. the JWT-attach on every
+      // .from() query) deadlocks the whole client. Mark auth state synchronously
+      // and defer the profile fetch to a macrotask so the lock is released first.
       if (session?.user) {
-        const profile = await fetchProfile(session.user.id);
-        set({ user: profile, session, isAuthenticated: true });
+        set({ session, isAuthenticated: true });
+        const userId = session.user.id;
+        setTimeout(async () => {
+          const profile = await fetchProfile(userId);
+          set({ user: profile });
+        }, 0);
       } else {
         set({ user: null, session: null, isAuthenticated: false });
       }

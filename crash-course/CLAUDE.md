@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # Crash Course
 
 Educational gamification platform: professors build course content as 2D graphs in an admin editor; students explore those graphs as a 3D world to learn the material. Stack is Vite + React 19 + TypeScript on the frontend, Supabase for data/auth/storage, and Vercel serverless functions for the AI tutor.
@@ -19,7 +23,7 @@ There is no test runner configured.
 The router in `src/App.tsx` serves two distinct experiences from the same SPA:
 
 - **Admin / professor** (`/admin/*`) — gated by `AuthGuard` (Supabase email/password). Builds courses → modules → maps → chapters → checkpoints → content items. The Map Editor (`src/pages/admin/MapEditor.tsx`) uses `@xyflow/react` to lay out checkpoint nodes on a 2D canvas.
-- **Student** (`/`, `/course/:id`, `/game`, `/game/map/:mapId`) — gated by `StudentAuthGuard`. The 3D world in `src/pages/GameMap.tsx` uses `@react-three/fiber` + `@react-three/rapier` + `ecctrl` for character control. It consumes the same map data the editor produces.
+- **Student** (`/`, `/course/:id`, `/game`, `/game/map/:mapId`) — gated by `StudentAuthGuard`. The 3D world in `src/pages/GameMap.tsx` uses `@react-three/fiber` + `@react-three/rapier` + `ecctrl` for character control. It consumes the same map data the editor produces. Reaching a quiz checkpoint launches a turn-based "boss battle" (`src/components/quiz/QuizBattle.tsx`, driven by `quizStore`); progress/XP/level-up feedback is rendered by the components in `src/components/gamification/`.
 
 ### The 2D-to-3D pipeline
 This is the central concept of the codebase — touch it carefully.
@@ -40,6 +44,8 @@ So `canvas_data` is the editable source of truth, `map_config` is the compiled a
 ### State stores (Zustand)
 `src/stores/`: `authStore`, `gameStore`, `quizStore`, `chatStore`. Re-exported from `src/stores/index.ts` along with selector hooks (e.g. `useCurrentNode`, `useChatMessages`). Prefer the named selector hooks over reaching into the store directly — they keep re-renders scoped.
 
+**Auth gotcha — never `await` Supabase inside `onAuthStateChange`.** supabase-js v2 serializes token access behind the GoTrue lock (`navigator.locks`), and the `onAuthStateChange` callback runs *while that lock is held*. Any Supabase call inside it — including a plain `.from(...)` query, which acquires the lock to attach the JWT — deadlocks the entire client: the callback waits on the query, the query waits on the lock, the lock waits on the callback. Once stuck, **all** subsequent requests hang (e.g. courses never load, course creation spins forever). The callback in `authStore.initialize` must set auth state synchronously and defer any profile/DB fetch to a macrotask (`setTimeout(0)`) so the lock releases first. This is timing-dependent, so it can pass on a fresh login and only deadlock on a returning/refreshed session — don't reintroduce it.
+
 ### Chat / AI tutor
 The "Professor Marrs" chatbot lives in `src/components/chat/ChatWidget.tsx` and calls `/api/chat` (or `/api/chat-stream` for SSE). Two implementations exist and **must be kept in sync**:
 
@@ -52,9 +58,9 @@ If you change the system prompt, context-building, model, or token limits, updat
 
 ### Edge Functions (Supabase)
 
-Two functions live under `supabase/functions/`. Both have `verify_jwt = false` set in `supabase/config.toml` because the gateway-level JWT check was rejecting valid user JWTs for unidentified reasons. Auth is enforced **inside** each function: it creates a Supabase client using the caller's `Authorization` header and queries `content_items`, which RLS blocks for non-owners. Same security model, enforced one layer down.
+Four functions live under `supabase/functions/`: `extract-pdf`, `generate-quiz`, `extract-quiz-from-pdf`, and `transcribe-video`. All have `verify_jwt = false` set in `supabase/config.toml` because the gateway-level JWT check was rejecting valid user JWTs for unidentified reasons. Auth is enforced **inside** each function: it creates a Supabase client using the caller's `Authorization` header and queries `content_items`, which RLS blocks for non-owners. Same security model, enforced one layer down. All four share the single `OPENAI_API_KEY` Supabase secret.
 
-Both client hooks (`useExtractPdf`, `useGenerateQuiz`) explicitly attach the user's JWT in the `headers` option of `supabase.functions.invoke` — supabase-js doesn't reliably auto-attach the session token across versions. Don't drop the explicit attachment.
+Every client hook (`useExtractPdf`, `useGenerateQuiz`, `useExtractQuizFromPdf`, `useTranscribeVideo`) explicitly attaches the user's JWT in the `headers` option of `supabase.functions.invoke` — supabase-js doesn't reliably auto-attach the session token across versions. Don't drop the explicit attachment.
 
 #### `extract-pdf` — PDF text extraction
 PDFs uploaded to a checkpoint are auto-scraped server-side so the AI tutor can reference their contents.
@@ -74,10 +80,18 @@ Manual, professor-triggered. Generates a multiple-choice quiz from the text cont
 - **Cost:** ~$0.001 per quiz at `gpt-4o-mini` rates.
 - **Validation:** the function does one retry on JSON parse / schema validation failure before giving up. Each question must have exactly 4 string options and an integer `correctIndex` in 0–3, or the function returns 502 with the validation error. The professor sees the actual error in the modal's amber banner.
 
+#### `extract-quiz-from-pdf` — parse an existing exam into a quiz
+Unlike `generate-quiz`, this does **not** invent questions — it parses questions that are literally present in an uploaded past-exam document (PDF via `unpdf`, or `.docx` via `mammoth`; legacy binary `.doc` is unsupported). Uses `gpt-4o-mini` to emit typed `QuizQuestion`s (`mcq` / `short_answer` / `numeric`, up to 80). The function name is kept for backwards-compat with the deployed URL; its payload accepts `documentUrl` (falls back to legacy `pdfUrl`). Client hook: `src/hooks/useExtractQuizFromPdf.ts`; UI: `src/components/admin/PdfQuizModal.tsx`. The professor chooses which parsed questions to keep.
+
+#### `transcribe-video` — lecture video transcription
+Audio is extracted **client-side in the browser** via `@ffmpeg/ffmpeg` (16kHz mono ~32kbps) and uploaded as a sidecar alongside the video `content_item`; this function downloads that audio and sends it to OpenAI `gpt-4o-mini-transcribe`, writing the result into `content_items.metadata.transcript`. Keeping audio small dodges Whisper's 25MB upload cap. Client hook: `src/hooks/useTranscribeVideo.ts`. Like PDF `extractedText`, the transcript feeds the AI tutor's context.
+
 #### Deploy
 ```
 supabase functions deploy extract-pdf
 supabase functions deploy generate-quiz
+supabase functions deploy extract-quiz-from-pdf
+supabase functions deploy transcribe-video
 ```
 
 The CLI reads `supabase/config.toml` and applies the per-function settings. If your CLI version doesn't honor those, append `--no-verify-jwt` to each command.

@@ -34,6 +34,7 @@ import type { ContentNode } from '../types/game';
 import type { ContentItem } from '../types/admin';
 import { normalizeQuizData } from '../types/admin';
 import { mapConfigToGameNodes, isNodeUnlocked, getMapProgress } from '../utils/mapConfigToGameNodes';
+import { computeWorldBounds } from '../components/game/worldDecorator/zonePlanner';
 
 // Keyboard control mapping for avatar
 const keyboardMap = [
@@ -446,6 +447,14 @@ function MapScene({ nodes, edges, startNodeId, onNodeInteract, onNodeProximity, 
   // Stable callback ref to avoid re-triggering WorldDecorator effect
   const terrainCbRef = useRef<(data: TerrainData) => void>((data) => setTerrainData(data));
 
+  // Walkable radius must cover the whole node layout, however large the
+  // professor's canvas is — a fixed radius walls off outlying checkpoints
+  // and strands the avatar at the start node.
+  const walkableRadius = useMemo(() => {
+    const bounds = computeWorldBounds(nodes);
+    return Math.max(60, bounds.size / 2 + 10);
+  }, [nodes]);
+
   // Start node = explicit startNodeId, or fall back to first node with no prerequisites
   const startNode = useMemo(
     () => (startNodeId ? nodes.find((n) => n.id === startNodeId) : null)
@@ -472,12 +481,14 @@ function MapScene({ nodes, edges, startNodeId, onNodeInteract, onNodeProximity, 
         onTerrainReady={terrainCbRef.current}
       />
 
-      {/* Flat ground collider as safety net */}
+      {/* Flat ground collider as a last-resort safety net. Kept BELOW the
+          deepest terrain valley (~-2.6) so it never fights the avatar's
+          terrain pin — the avatar rides heightFn, not this collider. */}
       <RigidBody type="fixed" colliders={false}>
-        <CuboidCollider args={[50, 0.1, 50]} position={[0, -0.5, 0]} />
+        <CuboidCollider args={[walkableRadius, 0.1, walkableRadius]} position={[0, -5, 0]} />
       </RigidBody>
 
-      <Boundaries />
+      <Boundaries radius={walkableRadius} />
 
       {nodes.map((node) => (
         <ContentNode3D
@@ -506,14 +517,10 @@ function MapScene({ nodes, edges, startNodeId, onNodeInteract, onNodeProximity, 
 
 // ── Boundaries ──────────────────────────────────────────
 
-function Boundaries() {
-  // Walkable area radius. Scaled up to match the larger world produced
-  // by the bumped canvas → world scale (buildMap.ts) and the wider
-  // outdoor padding (zonePlanner.computeWorldBounds). If you make the
-  // map even bigger later, bump this so the player can still walk to
-  // the visual edge.
-  const radius = 60;
-
+function Boundaries({ radius }: { radius: number }) {
+  // Walkable area half-extent, derived from the actual node layout in
+  // MapScene so every checkpoint stays inside the walls no matter how
+  // large the professor's canvas is.
   return (
     <group>
       <RigidBody type="fixed" colliders={false}>

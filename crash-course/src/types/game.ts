@@ -52,6 +52,11 @@ export interface GameState {
   playerProgress: PlayerProgress;
   avatarState: AvatarState;
 
+  // Bumped once per genuine checkpoint completion — the avatar subscribes to
+  // this (not to completedNodes) to trigger its celebration dance, so that
+  // loading saved progress at spawn doesn't start a dance.
+  danceCount: number;
+
   // Actions
   setCurrentModule: (module: number) => void;
   setCurrentNode: (nodeId: string | null) => void;

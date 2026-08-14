@@ -54,6 +54,31 @@ export function useAddChapter() {
   });
 }
 
+export function useUpdateChapter() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: {
+      id: string;
+      mapId: string;
+      title?: string;
+      order?: number;
+    }) => {
+      const dbUpdates: Record<string, unknown> = {};
+      if (updates.title !== undefined) dbUpdates.title = updates.title;
+      if (updates.order !== undefined) dbUpdates.order = updates.order;
+
+      const { error } = await (supabase
+        .from('chapters') as any)
+        .update(dbUpdates)
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: chapterKeys.forMap(variables.mapId) });
+    },
+  });
+}
+
 export function useDeleteChapter() {
   const queryClient = useQueryClient();
   return useMutation({

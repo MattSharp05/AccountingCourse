@@ -39,13 +39,23 @@ export function ContentNode({ data, selected }: NodeProps<ContentNodeType>) {
           </span>
         </div>
 
-        {/* Checkpoint badge */}
-        <span
-          className="self-start text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-sm text-white leading-none"
-          style={{ backgroundColor: accentColor }}
-        >
-          Checkpoint
-        </span>
+        {/* Checkpoint badge — flags cards saved by the old editor that have
+            no linked checkpoint (they are skipped when the map is built) */}
+        {data.checkpointId ? (
+          <span
+            className="self-start text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-sm text-white leading-none"
+            style={{ backgroundColor: accentColor }}
+          >
+            Checkpoint
+          </span>
+        ) : (
+          <span
+            className="self-start text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-sm bg-red-500 text-white leading-none"
+            title="This card is from an older version and isn't linked to a checkpoint. Remove it and drag the checkpoint in again from the sidebar."
+          >
+            Not linked
+          </span>
+        )}
 
         {/* Chapter subtitle */}
         {data.chapterTitle && (

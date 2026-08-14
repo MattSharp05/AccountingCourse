@@ -18,6 +18,7 @@ export function PrerequisiteEdge({
   sourcePosition,
   targetPosition,
   style,
+  markerEnd,
 }: EdgeProps) {
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
@@ -39,6 +40,7 @@ export function PrerequisiteEdge({
     <>
       <BaseEdge
         path={edgePath}
+        markerEnd={markerEnd}
         style={{
           ...style,
           stroke: PREREQ_COLOR,

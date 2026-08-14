@@ -52,8 +52,10 @@ function getConnections(
 }
 
 // ── Path state helper ───────────────────────────────────
+// Exported so the /__unlock-test dev harness exercises the exact logic
+// the 3D world uses to color paths.
 
-function getPathState(
+export function getPathState(
   conn: Connection,
   completedNodeIds: string[],
 ): 'completed' | 'available' | 'locked' {
@@ -81,6 +83,18 @@ export function WorldDecorator({
 
   // World bounds
   const bounds = useMemo(() => computeWorldBounds(nodes), [nodes]);
+
+  // Push the mountain ring out past the node layout on large maps so peaks
+  // never sit inside the walkable area. Small maps keep the preset radii.
+  const effectivePreset = useMemo<WorldPreset>(() => {
+    const half = bounds.size / 2;
+    const innerRadius = Math.max(preset.mountains.innerRadius, half + 20);
+    const outerRadius = Math.max(preset.mountains.outerRadius, innerRadius + 30);
+    if (innerRadius === preset.mountains.innerRadius && outerRadius === preset.mountains.outerRadius) {
+      return preset;
+    }
+    return { ...preset, mountains: { ...preset.mountains, innerRadius, outerRadius } };
+  }, [preset, bounds.size]);
 
   // Height function
   const heightFn = useMemo(
@@ -189,7 +203,7 @@ export function WorldDecorator({
   }, [nodes, completedNodeIds]);
 
   // Outer ground plane that extends to the mountain ring, so the world doesn't look like a floating island
-  const outerGroundRadius = preset.mountains.outerRadius + 10;
+  const outerGroundRadius = effectivePreset.mountains.outerRadius + 10;
 
   return (
     <group>
@@ -256,7 +270,7 @@ export function WorldDecorator({
       ))}
 
       {/* Mountain ring */}
-      <MountainRing preset={preset} seed={seed} />
+      <MountainRing preset={effectivePreset} seed={seed} />
     </group>
   );
 }

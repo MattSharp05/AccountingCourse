@@ -2,8 +2,8 @@ import { useState, useRef, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, ChevronRight, X, AlertTriangle, Video, FileText, Paperclip, PenLine, HelpCircle, Sparkles, GripVertical, FileQuestion } from 'lucide-react';
-import { useChaptersForMap, useAddChapter, useDeleteChapter } from '../../../hooks/useChapters';
-import { useCheckpointsForMap, useAddCheckpoint, useDeleteCheckpoint } from '../../../hooks/useCheckpoints';
+import { useChaptersForMap, useAddChapter, useUpdateChapter, useDeleteChapter } from '../../../hooks/useChapters';
+import { useCheckpointsForMap, useAddCheckpoint, useUpdateCheckpoint, useDeleteCheckpoint } from '../../../hooks/useCheckpoints';
 import { useContentItemsForMap, useAddContentItem, useUpdateContentItem, useDeleteContentItem } from '../../../hooks/useContentItems';
 import { useAuthStore } from '../../../stores/authStore';
 import { uploadFile } from '../../../lib/storage';
@@ -61,17 +61,20 @@ interface EditorSidebarProps {
   mapId: string;
   placedCheckpointIds?: string[];
   onRemoveNode?: (checkpointId: string) => void;
+  onRenameCheckpoint?: (checkpointId: string, title: string) => void;
 }
 
 // ── Component ───────────────────────────────────────────
 
-export function EditorSidebar({ mapId, placedCheckpointIds = [], onRemoveNode }: EditorSidebarProps) {
+export function EditorSidebar({ mapId, placedCheckpointIds = [], onRemoveNode, onRenameCheckpoint }: EditorSidebarProps) {
   const { data: chapters = [] } = useChaptersForMap(mapId);
   const { data: checkpoints = [] } = useCheckpointsForMap(mapId);
   const { data: contentItems = [] } = useContentItemsForMap(mapId);
   const addChapterMut = useAddChapter();
+  const updateChapterMut = useUpdateChapter();
   const deleteChapterMut = useDeleteChapter();
   const addCheckpointMut = useAddCheckpoint();
+  const updateCheckpointMut = useUpdateCheckpoint();
   const deleteCheckpointMut = useDeleteCheckpoint();
   const addContentItemMut = useAddContentItem();
   const updateContentItemMut = useUpdateContentItem();
@@ -85,6 +88,30 @@ export function EditorSidebar({ mapId, placedCheckpointIds = [], onRemoveNode }:
   // Accordion state: open chapters and open checkpoints
   const [openChapters, setOpenChapters] = useState<Set<string>>(new Set());
   const [openCheckpoints, setOpenCheckpoints] = useState<Set<string>>(new Set());
+
+  // Inline rename state — one chapter or checkpoint title at a time
+  const [renaming, setRenaming] = useState<{ kind: 'chapter' | 'checkpoint'; id: string } | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+
+  function startRename(kind: 'chapter' | 'checkpoint', id: string, currentTitle: string) {
+    setRenaming({ kind, id });
+    setRenameDraft(currentTitle);
+  }
+
+  function commitRename() {
+    if (!renaming) return;
+    const title = renameDraft.trim();
+    if (title) {
+      if (renaming.kind === 'chapter') {
+        updateChapterMut.mutate({ id: renaming.id, mapId, title });
+      } else {
+        updateCheckpointMut.mutate({ id: renaming.id, mapId, title });
+        // Keep the canvas card label in sync with the new name
+        onRenameCheckpoint?.(renaming.id, title);
+      }
+    }
+    setRenaming(null);
+  }
 
   // Add content dropdown state
   const [addDropdownCheckpointId, setAddDropdownCheckpointId] = useState<string | null>(null);
@@ -239,6 +266,7 @@ export function EditorSidebar({ mapId, placedCheckpointIds = [], onRemoveNode }:
     setUploading(false);
     setExtractingAudio(false);
     setTranscribing(false);
+    setUploadError(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
@@ -246,6 +274,7 @@ export function EditorSidebar({ mapId, placedCheckpointIds = [], onRemoveNode }:
   const [extractingAudio, setExtractingAudio] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [extractionError, setExtractionError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   async function handleConfirmUpload() {
     console.debug('[EditorSidebar] handleConfirmUpload start', {
@@ -265,6 +294,7 @@ export function EditorSidebar({ mapId, placedCheckpointIds = [], onRemoveNode }:
     const typeMap: Record<UploadKind, ContentItemType> = { video: 'video', pdf: 'pdf', file: 'file', text: 'text', quiz: 'quiz', 'ai-quiz': 'quiz', 'pdf-quiz': 'quiz' };
     setUploading(true);
     setExtractionError(null);
+    setUploadError(null);
     try {
       let fileUrl: string | undefined;
       if (pendingFile && userId && ['video', 'pdf', 'file'].includes(uploadModal.kind)) {
@@ -361,6 +391,7 @@ export function EditorSidebar({ mapId, placedCheckpointIds = [], onRemoveNode }:
       closeUploadModal();
     } catch (err) {
       console.error('[EditorSidebar] Upload failed:', err);
+      setUploadError(err instanceof Error ? err.message : 'Upload failed. Please try again.');
       setUploading(false);
       setExtracting(false);
       setExtractingAudio(false);
@@ -406,20 +437,50 @@ export function EditorSidebar({ mapId, placedCheckpointIds = [], onRemoveNode }:
                 <div className="h-1" style={{ backgroundColor: sectionColor }} />
 
                 {/* Chapter header */}
-                <button
+                <div
                   onClick={() => toggleChapter(chapter.id)}
-                  className="w-full flex items-center gap-2 px-3 py-2.5 bg-white/5 hover:bg-white/10 transition-colors text-left"
+                  className="w-full flex items-center gap-2 px-3 py-2.5 bg-white/5 hover:bg-white/10 transition-colors text-left cursor-pointer group/chapter"
                 >
                   <span className="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-white/20" style={{ backgroundColor: sectionColor }} />
                   <motion.span animate={{ rotate: isChapterOpen ? 90 : 0 }} transition={{ duration: 0.15 }} className="text-[#6b7280] inline-flex">
                     <ChevronRight className="w-3.5 h-3.5" />
                   </motion.span>
-                  <span className="flex-1 text-sm font-medium text-white/90 truncate">{chapter.title}</span>
+                  {renaming?.kind === 'chapter' && renaming.id === chapter.id ? (
+                    <input
+                      value={renameDraft}
+                      onChange={(e) => setRenameDraft(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      onBlur={commitRename}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') commitRename();
+                        if (e.key === 'Escape') setRenaming(null);
+                      }}
+                      autoFocus
+                      className="flex-1 min-w-0 text-sm font-medium text-white bg-white/10 border border-brand-accent/50 rounded-md outline-none px-1.5 py-0.5"
+                    />
+                  ) : (
+                    <span
+                      className="flex-1 text-sm font-medium text-white/90 truncate"
+                      onDoubleClick={(e) => { e.stopPropagation(); startRename('chapter', chapter.id, chapter.title); }}
+                      title="Double-click to rename"
+                    >
+                      {chapter.title}
+                    </span>
+                  )}
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => { e.stopPropagation(); startRename('chapter', chapter.id, chapter.title); }}
+                    className="w-6 h-6 flex items-center justify-center rounded-full text-[#6b7280] hover:text-brand-accent hover:bg-brand-accent/10 transition-colors opacity-0 group-hover/chapter:opacity-100"
+                    title="Rename chapter"
+                  >
+                    <PenLine className="w-3 h-3" />
+                  </span>
                   <span className="text-[10px] text-[#6b7280] tabular-nums font-medium">{chapterCheckpoints.length}</span>
                   <span role="button" tabIndex={0} onClick={(e) => handleDeleteChapter(e, chapter.id)} className="ml-1 w-6 h-6 flex items-center justify-center rounded-full text-[#6b7280] hover:text-red-400 hover:bg-red-500/10 transition-colors">
                     <X className="w-3.5 h-3.5" />
                   </span>
-                </button>
+                </div>
 
                 {/* Checkpoints within chapter */}
                 <AnimatePresence initial={false}>
@@ -437,9 +498,9 @@ export function EditorSidebar({ mapId, placedCheckpointIds = [], onRemoveNode }:
 
                           return (
                             <div key={checkpoint.id} className="border border-white/10 rounded-lg bg-white/[0.03]">
-                              {/* Checkpoint header — draggable */}
+                              {/* Checkpoint header — draggable (except while renaming) */}
                               <div
-                                draggable="true"
+                                draggable={!(renaming?.kind === 'checkpoint' && renaming.id === checkpoint.id)}
                                 onDragStart={(e) => handleDragStart(e, checkpoint, chapter.id)}
                                 className="flex items-center gap-2 px-2.5 py-2 cursor-grab active:cursor-grabbing group"
                               >
@@ -449,7 +510,35 @@ export function EditorSidebar({ mapId, placedCheckpointIds = [], onRemoveNode }:
                                     <ChevronRight className="w-3 h-3" />
                                   </motion.span>
                                 </button>
-                                <span className="flex-1 text-sm text-white/90 truncate font-medium">{checkpoint.title}</span>
+                                {renaming?.kind === 'checkpoint' && renaming.id === checkpoint.id ? (
+                                  <input
+                                    value={renameDraft}
+                                    onChange={(e) => setRenameDraft(e.target.value)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onBlur={commitRename}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') commitRename();
+                                      if (e.key === 'Escape') setRenaming(null);
+                                    }}
+                                    autoFocus
+                                    className="flex-1 min-w-0 text-sm font-medium text-white bg-white/10 border border-brand-accent/50 rounded-md outline-none px-1.5 py-0.5"
+                                  />
+                                ) : (
+                                  <span
+                                    className="flex-1 text-sm text-white/90 truncate font-medium"
+                                    onDoubleClick={(e) => { e.stopPropagation(); startRename('checkpoint', checkpoint.id, checkpoint.title); }}
+                                    title="Double-click to rename"
+                                  >
+                                    {checkpoint.title}
+                                  </span>
+                                )}
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); startRename('checkpoint', checkpoint.id, checkpoint.title); }}
+                                  className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-[#6b7280] hover:text-brand-accent hover:bg-brand-accent/10 transition-colors opacity-0 group-hover:opacity-100"
+                                  title="Rename checkpoint"
+                                >
+                                  <PenLine className="w-3 h-3" />
+                                </button>
                                 {items.length > 0 && (
                                   <span className="text-[10px] text-[#6b7280] tabular-nums">{items.length} item{items.length !== 1 ? 's' : ''}</span>
                                 )}
@@ -526,6 +615,7 @@ export function EditorSidebar({ mapId, placedCheckpointIds = [], onRemoveNode }:
             extracting={extracting}
             extractingAudio={extractingAudio}
             transcribing={transcribing}
+            uploadError={uploadError}
             onTitleChange={setModalTitle}
             onTextContentChange={setModalTextContent}
             onConfirm={handleConfirmUpload}
@@ -606,8 +696,9 @@ function AddContentButton({ checkpointId: _cp, isOpen, onToggle, onSelect, dropd
 
 // ── Upload Modal ─────────────────────────────────────────
 
-function UploadModal({ kind, fileName, checkpointName, title, textContent, uploading, extracting, extractingAudio, transcribing, onTitleChange, onTextContentChange, onConfirm, onCancel }: {
+function UploadModal({ kind, fileName, checkpointName, title, textContent, uploading, extracting, extractingAudio, transcribing, uploadError, onTitleChange, onTextContentChange, onConfirm, onCancel }: {
   kind: UploadKind; fileName?: string; checkpointName: string; title: string; textContent: string; uploading: boolean; extracting?: boolean; extractingAudio?: boolean; transcribing?: boolean;
+  uploadError?: string | null;
   onTitleChange: (v: string) => void; onTextContentChange: (v: string) => void; onConfirm: () => void; onCancel: () => void;
 }) {
   const isValid = title.trim().length > 0 && !uploading && !extracting && !extractingAudio && !transcribing;
@@ -634,6 +725,12 @@ function UploadModal({ kind, fileName, checkpointName, title, textContent, uploa
           {fileName && <p className="text-xs text-[#6b7280] mt-0.5 truncate">{fileName}</p>}
         </div>
         <div className="px-5 py-5 space-y-4">
+          {uploadError && (
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-red-500/10 border border-red-400/30 text-xs text-red-300 leading-relaxed">
+              <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              <span>{uploadError}</span>
+            </div>
+          )}
           <div>
             <label className="block text-[10px] font-medium tracking-[0.12em] uppercase text-[#9ca3af] mb-1.5">Title</label>
             <input type="text" value={title} onChange={(e) => onTitleChange(e.target.value)} placeholder="Enter a title..." className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 text-white placeholder-white/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-accent/50 focus:border-brand-accent/50 transition-colors" autoFocus />

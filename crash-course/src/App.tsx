@@ -9,6 +9,8 @@ import { StudentCourseDetail } from './pages/StudentCourseDetail';
 import { StudentAuthGuard } from './components/StudentAuthGuard';
 import { AdminDashboard, CourseDetail, ModuleDetail, MapEditor, LoginPage } from './pages/admin';
 import { AuthGuard } from './components/admin/AuthGuard';
+import { DevPhysicsTest } from './pages/DevPhysicsTest';
+import { DevUnlockTest } from './pages/DevUnlockTest';
 
 // Create a client for React Query
 const queryClient = new QueryClient({
@@ -39,6 +41,14 @@ const router = createBrowserRouter([
   { path: '/admin/course/:courseId', element: <AuthGuard><CourseDetail /></AuthGuard> },
   { path: '/admin/course/:courseId/module/:moduleId', element: <AuthGuard><ModuleDetail /></AuthGuard> },
   { path: '/admin/map/:mapId', element: <AuthGuard><MapEditor /></AuthGuard> },
+
+  // Dev-only test harnesses (never registered in production builds)
+  ...(import.meta.env.DEV
+    ? [
+        { path: '/__physics-test', element: <DevPhysicsTest /> },
+        { path: '/__unlock-test', element: <DevUnlockTest /> },
+      ]
+    : []),
 ]);
 
 function App() {

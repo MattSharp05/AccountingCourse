@@ -11,6 +11,7 @@ import {
   useReactFlow,
   ReactFlowProvider,
   ConnectionMode,
+  MarkerType,
   type Connection,
   type Node,
   type Edge,
@@ -25,8 +26,14 @@ import { nodeTypes } from '../../components/admin/canvas/ContentNode';
 import { edgeTypes } from '../../components/admin/canvas/PrerequisiteEdge';
 import { EditorSidebar } from '../../components/admin/sidebar/EditorSidebar';
 import { BrandButton } from '../../components/ui';
-import { buildMapConfig, SECTION_COLORS } from '../../utils/buildMap';
+import { buildMapConfig, validateMapConfig, SECTION_COLORS } from '../../utils/buildMap';
 import type { ContentNodeData } from '../../types/admin';
+
+// Arrowheads make edge direction obvious — the arrow points from the
+// prerequisite toward the checkpoint it unlocks. Reversed drags were a
+// major source of "this checkpoint never unlocks" reports.
+const PREREQ_MARKER = { type: MarkerType.ArrowClosed, color: '#f59e0b', width: 16, height: 16 };
+const PATH_MARKER = { type: MarkerType.ArrowClosed, color: '#9ca3af', width: 14, height: 14 };
 
 // ── Wrapper with ReactFlowProvider ────────────────────────
 
@@ -74,13 +81,28 @@ function MapEditorInner() {
         const enriched = map.canvasData.nodes.map((node) => {
           const cp = checkpoints.find((c) => c.id === node.data.checkpointId);
           const sectionColor = cp ? chapterColorMap.get(cp.chapterId) : undefined;
-          return { ...node, data: { ...node.data, sectionColor } };
+          const chapter = cp ? sortedCh.find((ch) => ch.id === cp.chapterId) : undefined;
+          // Sync card labels with the current checkpoint/chapter titles — the
+          // copies stored in canvas_data go stale after a rename.
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              sectionColor,
+              title: cp?.title ?? node.data.title,
+              chapterTitle: chapter?.title ?? node.data.chapterTitle,
+            },
+          };
         });
         setNodes(enriched);
       }
       if (map.canvasData?.edges) {
-        // Ensure all edges have a type (older edges may lack one)
-        setEdges(map.canvasData.edges.map((e) => ({ ...e, type: e.type || 'prerequisite' })));
+        // Ensure all edges have a type (older edges may lack one) and a
+        // direction arrowhead (older edges predate markers)
+        setEdges(map.canvasData.edges.map((e) => {
+          const type = e.type || 'prerequisite';
+          return { ...e, type, markerEnd: type === 'prerequisite' ? PREREQ_MARKER : PATH_MARKER };
+        }));
       }
     }
   }, [map, chapters, checkpoints, setNodes, setEdges]);
@@ -121,6 +143,10 @@ function MapEditorInner() {
     if (!mapId || !initialLoadRef.current) return;
 
     setNeedsBuild(true);
+    // Canvas changed since the last build — those warnings no longer
+    // describe the current state, so drop them instead of confusing the
+    // professor with stale messages (e.g. "no start set" after they set one).
+    setBuildWarnings([]);
 
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
@@ -173,7 +199,7 @@ function MapEditorInner() {
 
       console.log('[MapEditor] New edge:', connection.source, `(${connection.sourceHandle})`, '→', connection.target, `(${connection.targetHandle})`);
       setEdges((eds) =>
-        addEdge({ ...connection, type: 'prerequisite' }, eds)
+        addEdge({ ...connection, type: 'prerequisite', markerEnd: PREREQ_MARKER }, eds)
       );
     },
     [edges, setEdges]
@@ -320,7 +346,9 @@ function MapEditorInner() {
     (edgeId: string, currentType: string) => {
       const newType = currentType === 'prerequisite' ? 'path' : 'prerequisite';
       setEdges((eds) =>
-        eds.map((e) => (e.id === edgeId ? { ...e, type: newType } : e))
+        eds.map((e) => (e.id === edgeId
+          ? { ...e, type: newType, markerEnd: newType === 'prerequisite' ? PREREQ_MARKER : PATH_MARKER }
+          : e))
       );
       setContextMenu(null);
     },
@@ -347,6 +375,20 @@ function MapEditorInner() {
     [setNodes, setEdges]
   );
 
+  // Rename by checkpointId (called from sidebar when renaming a checkpoint)
+  const handleRenameCheckpoint = useCallback(
+    (checkpointId: string, title: string) => {
+      setNodes((nds) =>
+        nds.map((n) =>
+          n.data.checkpointId === checkpointId
+            ? { ...n, data: { ...n.data, title } }
+            : n
+        )
+      );
+    },
+    [setNodes]
+  );
+
   // Delete an edge
   const handleDeleteEdge = useCallback(
     (edgeId: string) => {
@@ -368,6 +410,7 @@ function MapEditorInner() {
 
   // ── Build Map ─────────────────────────────────────────
   const [toast, setToast] = useState<string | null>(null);
+  const [buildWarnings, setBuildWarnings] = useState<string[]>([]);
 
   const handleBuildMap = useCallback(async () => {
     if (!mapId) return;
@@ -378,10 +421,21 @@ function MapEditorInner() {
       const result = buildMapConfig(nodes, edges, checkpoints, chapters);
       updateMap({ id: mapId!, mapConfig: result });
 
+      const warnings = validateMapConfig(result);
+      // Cards from the pre-checkpoint editor aren't linked to a checkpoint —
+      // the build skips them, so anything set on them (like Start) is lost.
+      const legacyCards = nodes.filter((n) => !n.data.checkpointId);
+      for (const n of legacyCards) {
+        warnings.unshift(
+          `"${n.data.title}" is an old-style card not linked to a checkpoint — it was left out of the build. Remove it from the canvas and drag the checkpoint in again from the sidebar${n.data.isStart ? ', then re-set it as the start' : ''}.`,
+        );
+      }
+      setBuildWarnings(warnings);
+
       setNeedsBuild(false);
-      setToast('Map built successfully!');
+      setToast(warnings.length > 0 ? 'Map built — with warnings' : 'Map built successfully!');
       setTimeout(() => setToast(null), 3000);
-      console.log('[MapEditor] Build complete:', { nodeCount: result.nodes.length });
+      console.log('[MapEditor] Build complete:', { nodeCount: result.nodes.length, warnings });
     } catch (err) {
       console.error('[MapEditor] Build failed:', err);
       setToast('Build failed. Check console for details.');
@@ -473,6 +527,27 @@ function MapEditorInner() {
           </BrandButton>
         </div>
       </div>
+
+      {/* ── Build warnings ──────────────────────────────── */}
+      {buildWarnings.length > 0 && (
+        <div className="shrink-0 mx-5 mt-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-400/30 text-xs text-amber-200">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1.5">
+              <p className="font-semibold uppercase tracking-[0.15em] text-amber-300">Unlock warnings</p>
+              {buildWarnings.map((w, i) => (
+                <p key={i} className="leading-relaxed">• {w}</p>
+              ))}
+            </div>
+            <button
+              onClick={() => setBuildWarnings([])}
+              className="shrink-0 text-amber-300/70 hover:text-amber-200"
+              aria-label="Dismiss warnings"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Main area ───────────────────────────────────── */}
       <div className="flex flex-1 min-h-0">
@@ -598,6 +673,7 @@ function MapEditorInner() {
           mapId={mapId!}
           placedCheckpointIds={nodes.map((n) => n.data.checkpointId)}
           onRemoveNode={handleRemoveNodeByCheckpointId}
+          onRenameCheckpoint={handleRenameCheckpoint}
         />
       </div>
 

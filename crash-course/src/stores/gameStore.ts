@@ -35,6 +35,7 @@ export const useGameStore = create<GameState>()(
     teleportTarget: null,
     playerProgress: defaultPlayerProgress,
     avatarState: defaultAvatarState,
+    danceCount: 0,
 
     // Actions
     setCurrentModule: (module) => {
@@ -68,7 +69,7 @@ export const useGameStore = create<GameState>()(
         'in map:', JSON.stringify(mapId),
         'Map completedNodes after:', JSON.stringify(next),
       );
-      set({
+      set((state) => ({
         playerProgress: {
           ...playerProgress,
           completedNodes: {
@@ -76,7 +77,8 @@ export const useGameStore = create<GameState>()(
             [mapId]: next,
           },
         },
-      });
+        danceCount: state.danceCount + 1,
+      }));
       get().saveProgress();
     },
 

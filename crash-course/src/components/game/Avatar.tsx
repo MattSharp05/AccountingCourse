@@ -1,12 +1,10 @@
-import { useRef, useState, useEffect, useCallback, Suspense } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useKeyboardControls } from '@react-three/drei';
 import { CapsuleCollider, RigidBody, type RapierRigidBody } from '@react-three/rapier';
 import * as THREE from 'three';
 import { useGameStore } from '../../stores';
 import type { ContentNode } from '../../types/game';
-import { ModelCharacter } from './models/ModelCharacter';
-import { ModelErrorBoundary } from './models/ModelErrorBoundary';
 
 interface AvatarProps {
   nodes: ContentNode[];
@@ -37,8 +35,11 @@ export function Avatar({ nodes, onNodeProximity, spawnPosition = [0, 2, 0], heig
   }, [updateAvatarAnimation]);
 
   useEffect(() => {
+    // Subscribe to the completion counter, NOT completedNodes — loading
+    // saved progress at spawn replaces the completedNodes object and used
+    // to trigger a dance that froze movement for 4s right at map load.
     const unsub = useGameStore.subscribe(
-      (s) => s.playerProgress.completedNodes,
+      (s) => s.danceCount,
       () => startDance(),
     );
     return () => {
@@ -107,31 +108,33 @@ export function Avatar({ nodes, onNodeProximity, spawnPosition = [0, 2, 0], heig
     const translation = rigidBodyRef.current.translation();
     const currentPosition = new THREE.Vector3(translation.x, translation.y, translation.z);
 
-    // During dance, ignore movement input
+    // Dance pauses movement, but any movement input cancels it immediately —
+    // a celebration must never read as "my character is stuck".
     if (isDancing) {
-      rigidBodyRef.current.setLinvel(
-        { x: 0, y: rigidBodyRef.current.linvel().y, z: 0 },
-        true
-      );
-      // still do terrain following + position updates below
-      if (heightFn) {
-        const terrainY = heightFn(currentPosition.x, currentPosition.z);
-        const targetY = terrainY + 0.65;
-        if (currentPosition.y < targetY + 0.1) {
+      if (isMoving) {
+        if (danceTimerRef.current) clearTimeout(danceTimerRef.current);
+        danceTimerRef.current = null;
+        setIsDancing(false);
+      } else {
+        rigidBodyRef.current.setLinvel(
+          { x: 0, y: rigidBodyRef.current.linvel().y, z: 0 },
+          true
+        );
+        // still do terrain following + position updates below
+        if (heightFn) {
+          const terrainY = heightFn(currentPosition.x, currentPosition.z);
           rigidBodyRef.current.setTranslation(
-            { x: currentPosition.x, y: targetY, z: currentPosition.z },
+            { x: currentPosition.x, y: terrainY + 0.65, z: currentPosition.z },
             true,
           );
           const vel = rigidBodyRef.current.linvel();
-          if (vel.y < 0) {
-            rigidBodyRef.current.setLinvel({ x: vel.x, y: 0, z: vel.z }, true);
-          }
+          rigidBodyRef.current.setLinvel({ x: vel.x, y: 0, z: vel.z }, true);
         }
+        const finalPos = rigidBodyRef.current.translation();
+        updateAvatarPosition([finalPos.x, finalPos.y, finalPos.z]);
+        rigidBodyRef.current.setAngvel({ x: 0, y: 0, z: 0 }, true);
+        return;
       }
-      const finalPos = rigidBodyRef.current.translation();
-      updateAvatarPosition([finalPos.x, finalPos.y, finalPos.z]);
-      rigidBodyRef.current.setAngvel({ x: 0, y: 0, z: 0 }, true);
-      return;
     }
 
     // Update animation state
@@ -173,24 +176,20 @@ export function Avatar({ nodes, onNodeProximity, spawnPosition = [0, 2, 0], heig
       );
     }
 
-    // Terrain following — pin avatar Y to terrain surface
+    // Terrain following — pin avatar Y to the terrain surface, both up AND
+    // down. There is no jump, so the terrain owns the Y axis entirely. The
+    // old snap-up-only version let the avatar hover over valleys (caught by
+    // the flat safety collider above the valley floor) and fight gravity on
+    // downslopes — both read as "the player is stuck on the hills".
     if (heightFn) {
       const terrainY = heightFn(currentPosition.x, currentPosition.z);
-      const targetY = terrainY + 0.65; // capsule half-extent offset
-      const currentY = currentPosition.y;
-
-      // If avatar is below or near terrain, snap up; allow small tolerance above
-      if (currentY < targetY + 0.1) {
-        rigidBodyRef.current.setTranslation(
-          { x: currentPosition.x, y: targetY, z: currentPosition.z },
-          true,
-        );
-        // Kill downward velocity so gravity doesn't fight
-        const vel = rigidBodyRef.current.linvel();
-        if (vel.y < 0) {
-          rigidBodyRef.current.setLinvel({ x: vel.x, y: 0, z: vel.z }, true);
-        }
-      }
+      rigidBodyRef.current.setTranslation(
+        { x: currentPosition.x, y: terrainY + 0.65, z: currentPosition.z },
+        true,
+      );
+      // Zero vertical velocity so gravity never accumulates against the pin
+      const vel = rigidBodyRef.current.linvel();
+      rigidBodyRef.current.setLinvel({ x: vel.x, y: 0, z: vel.z }, true);
     }
 
     // Update store with current position (re-read after possible correction)
@@ -212,15 +211,12 @@ export function Avatar({ nodes, onNodeProximity, spawnPosition = [0, 2, 0], heig
       linearDamping={0.5}
       angularDamping={1}
       lockRotations
+      gravityScale={0}
     >
       <CapsuleCollider args={[0.35, 0.3]} position={[0, 0.65, 0]} />
 
       <group ref={meshRef}>
-        <ModelErrorBoundary fallback={<StudentCharacter animation={animation} />}>
-          <Suspense fallback={<StudentCharacter animation={animation} />}>
-            <ModelCharacter animation={animation} />
-          </Suspense>
-        </ModelErrorBoundary>
+        <StudentCharacter animation={animation} />
       </group>
     </RigidBody>
   );
@@ -241,6 +237,23 @@ function StudentCharacter({ animation }: { animation: 'idle' | 'walk' | 'run' | 
     const time = state.clock.elapsedTime;
     const speed = animation === 'run' ? 12 : animation === 'walk' ? 6 : 0;
     const amplitude = animation === 'run' ? 0.4 : animation === 'walk' ? 0.25 : 0;
+
+    // Celebration dance: spin + hop with arms swinging
+    if (animation === 'dance') {
+      bodyRef.current.rotation.y = time * 5;
+      bodyRef.current.position.y = Math.abs(Math.sin(time * 8)) * 0.25;
+      if (leftArmRef.current && rightArmRef.current) {
+        leftArmRef.current.rotation.z = Math.sin(time * 8) * 0.9 + 0.5;
+        rightArmRef.current.rotation.z = -Math.sin(time * 8) * 0.9 - 0.5;
+      }
+      return;
+    }
+    // Reset dance-only transforms
+    bodyRef.current.rotation.y = 0;
+    if (leftArmRef.current && rightArmRef.current) {
+      leftArmRef.current.rotation.z = 0;
+      rightArmRef.current.rotation.z = 0;
+    }
 
     // Idle bounce
     if (animation === 'idle') {
